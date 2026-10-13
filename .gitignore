@@ -1,32 +1,107 @@
-# Prerequisites
-*.d
+# ==========================================
+# Visual Studio (C++) 用 .gitignore
+# ==========================================
 
-# Compiled Object files
-*.slo
-*.lo
-*.o
+# ---- Visual Studio のユーザー固有ファイル / キャッシュ ----
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.vcxproj.user
+
+# ---- ビルド出力 ----
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+out/
+
+# ---- C/C++ のコンパイル生成物 ----
 *.obj
-
-# Precompiled Headers
-*.gch
+*.o
 *.pch
-
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
-
-# Fortran module files
-*.mod
-*.smod
-
-# Compiled Static libraries
-*.lai
-*.la
-*.a
+*.ipch
+*.pdb
+*.ilk
+*.idb
+*.iobj
+*.ipdb
+*.exp
 *.lib
-
-# Executables
+*.dll
 *.exe
-*.out
-*.app
+*.tlog
+*.lastbuildstate
+*.log
+*.recipe
+*.res
+*.aps
+*.tlb
+*.tli
+*.tlh
+*.tmp
+*.tmp_proj
+*_i.c
+*_p.c
+*_h.h
+*.meta
+*.pgc
+*.pgd
+*.rsp
+*.sbr
+*.sdf
+*.cachefile
+*.VC.db
+*.VC.VC.opendb
+*.opensdf
+*.opendb
+ipch/
+
+# ---- IntelliSense / ブラウズ情報 ----
+*.ncb
+*.aps
+*.bsc
+
+# ---- コードカバレッジ / プロファイラ ----
+*.coverage
+*.coveragexml
+*.psess
+*.vsp
+*.vspx
+*.sap
+*.diagsession
+
+# ---- NuGet パッケージ ----
+packages/
+*.nupkg
+!**/packages/build/
+
+# ---- vcpkg ----
+vcpkg_installed/
+
+# ---- CMake (CMake プロジェクトを VS で開く場合) ----
+CMakeSettings.json.user
+CMakeUserPresets.json
+CMakeCache.txt
+CMakeFiles/
+cmake-build-*/
+
+# ---- 他エディタ / OS ----
+.vscode/
+.idea/
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
