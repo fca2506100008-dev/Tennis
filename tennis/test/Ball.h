@@ -10,13 +10,15 @@ public:
     Vector3 landingPos;
     bool hasLanded;
     bool isMoving;
+    bool isTossing; // トス中フラグ
 
     Ball(Vector3 pos, Vector3 vel);
-    void Launch(Vector3 pos, Vector3 vel);
-    void Reset(Vector3 pos);
-    void Update(float speedFactor = 1.0f); // ★ speedFactor 引数を追加
-    void Draw() const;
-    void DrawShadow() const;
-    void DrawLandingPoint() const;
-    void DrawPredictMarker() const;
+    void StartToss(Vector3 pos);                   // トス開始
+    void Launch(Vector3 pos, Vector3 vel);         // サーブ・ショット発射
+    void Reset(Vector3 pos);                       // 位置リセット
+    void Update(float speedFactor = 1.0f);          // 物理・座標更新（速度倍率対応）
+    void Draw() const;                             // ボール描画
+    void DrawShadow() const;                       // 影描画
+    void DrawLandingPoint() const;                 // 着地点マーカー描画
+    void DrawPredictMarker() const;                // 落下予測線描画
 };

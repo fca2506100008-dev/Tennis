@@ -14,7 +14,6 @@
 #define COURT_LENGTH 240.0f
 #endif
 
-// ★ ゲーム状態（ポーズ画面 PAUSE を追加）
 enum class GameState {
     TITLE,
     PLAY,
@@ -56,6 +55,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     bool rKeyPrev = false;
     bool enterKeyPrev = false;
+    bool spaceKeyPrev = false;
+    bool zKeyPrev = false;
     bool leftKeyPrev = false;
     bool rightKeyPrev = false;
     bool upKeyPrev = false;
@@ -82,8 +83,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     GameState currentState = GameState::TITLE;
     std::string winnerText = "";
-
-    // ★ ポーズメニュー用変数（0: 再開, 1: リスタート, 2: タイトルへ戻る）
     int pauseMenuIndex = 0;
 
     SetCameraNearFar(5.0f, 1200.0f);
@@ -153,6 +152,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     while (ProcessMessage() == 0 && ClearDrawScreen() == 0) {
         bool rKey = CheckHitKey(KEY_INPUT_R) != 0;
         bool enterKey = CheckHitKey(KEY_INPUT_RETURN) != 0;
+        bool spaceKey = CheckHitKey(KEY_INPUT_SPACE) != 0;
+        bool zKey = CheckHitKey(KEY_INPUT_Z) != 0;
         bool leftKey = CheckHitKey(KEY_INPUT_LEFT) != 0;
         bool rightKey = CheckHitKey(KEY_INPUT_RIGHT) != 0;
         bool upKey = CheckHitKey(KEY_INPUT_UP) != 0;
@@ -162,16 +163,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
         float currentSpeedFactor = speedList[selectedSpeedIndex];
 
-        // ====================================================
-        // ① タイトル画面の処理
-        // ====================================================
         if (currentState == GameState::TITLE) {
-            if (leftKey && !leftKeyPrev) {
-                selectedGameIndex = (selectedGameIndex + 2) % 3;
-            }
-            if (rightKey && !rightKeyPrev) {
-                selectedGameIndex = (selectedGameIndex + 1) % 3;
-            }
+            if (leftKey && !leftKeyPrev)  selectedGameIndex = (selectedGameIndex + 2) % 3;
+            if (rightKey && !rightKeyPrev) selectedGameIndex = (selectedGameIndex + 1) % 3;
 
             if ((upKey && !upKeyPrev) || (downKey && !downKeyPrev)) {
                 selectedSpeedIndex = (selectedSpeedIndex + 1) % 2;
@@ -201,53 +195,66 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
             DrawString(460, 490, "PRESS ENTER TO START", GetColor(0, 255, 255));
 
             SetFontSize(16);
-            DrawString(430, 580, "操作方法: 矢印キー(移動/設定選択) / Z or SPACE(打球)", GetColor(200, 200, 200));
-            DrawString(430, 600, "Rキー: サーブ発射 / ESC or Pキー: ポーズ", GetColor(200, 200, 200));
+            DrawString(430, 580, "操作方法: 矢印キー(移動/選択) / R(トス) -> SPACE/Z(サーブ打球)", GetColor(200, 200, 200));
+            DrawString(430, 600, "ESC or Pキー: ポーズ", GetColor(200, 200, 200));
         }
-
-        // ====================================================
-        // ② プレイ中 ＆ ③ ポーズ画面の処理
-        // ====================================================
         else if (currentState == GameState::PLAY || currentState == GameState::PAUSE) {
 
-            // ★ ESCキー または Pキー でポーズ切替
             if ((escKey && !escKeyPrev) || (pKey && !pKeyPrev)) {
                 if (currentState == GameState::PLAY) {
                     currentState = GameState::PAUSE;
-                    pauseMenuIndex = 0; // 初期選択は「RESUME」
+                    pauseMenuIndex = 0;
                 }
                 else if (currentState == GameState::PAUSE) {
                     currentState = GameState::PLAY;
                 }
             }
 
-            // ----------------------------------------------------
-            // プレイ中のみ更新処理を実行（ポーズ中は時間を止める）
-            // ----------------------------------------------------
             if (currentState == GameState::PLAY) {
+                // サーブ前 ＆ トス動作の処理
                 if (!ball.isMoving) {
                     if (messageTimer <= 0) {
                         if (isPlayerServer) {
-                            ball.position = { player.position.x, player.position.y + 10.0f, player.position.z + 5.0f };
+                            // 静止中はプレイヤーの手元にボール配置
+                            if (!ball.isTossing) {
+                                ball.position = { player.position.x, player.position.y + 10.0f, player.position.z + 5.0f };
 
-                            if (rKey && !rKeyPrev) {
-                                ball.Launch(
-                                    { player.position.x, 20.0f, player.position.z + 10.0f },
-                                    { 0.0f, 5.5f, 8.5f }
-                                );
+                                // ① Rキーでトスアップ開始
+                                if (rKey && !rKeyPrev) {
+                                    ball.StartToss({ player.position.x, player.position.y + 12.0f, player.position.z + 5.0f });
+                                }
+                            }
+                            // ② トス中にSPACEまたはZキーでサーブ打球！
+                            else {
+                                bool shotInput = (spaceKey && !spaceKeyPrev) || (zKey && !zKeyPrev);
+                                if (shotInput && ball.position.y >= 20.0f) {
+                                    ball.Launch(
+                                        ball.position,
+                                        { 0.0f, 3.5f, 9.5f } // 鋭く相手コートへ発射
+                                    );
+                                }
                             }
                         }
                         else {
-                            ball.position = { enemy.position.x, enemy.position.y + 10.0f, enemy.position.z - 5.0f };
+                            // CPUサーブ（全自動）
+                            if (!ball.isTossing) {
+                                ball.position = { enemy.position.x, enemy.position.y + 10.0f, enemy.position.z - 5.0f };
 
-                            cpuServeTimer++;
-                            int targetWait = (int)(60 / currentSpeedFactor);
-                            if (cpuServeTimer >= targetWait || (enterKey && !enterKeyPrev)) {
-                                ball.Launch(
-                                    { enemy.position.x, 20.0f, enemy.position.z - 10.0f },
-                                    { 0.0f, 5.5f, -8.5f }
-                                );
-                                cpuServeTimer = 0;
+                                cpuServeTimer++;
+                                int targetWait = (int)(60 / currentSpeedFactor);
+                                if (cpuServeTimer >= targetWait || (enterKey && !enterKeyPrev)) {
+                                    ball.StartToss({ enemy.position.x, enemy.position.y + 12.0f, enemy.position.z - 5.0f });
+                                    cpuServeTimer = 0;
+                                }
+                            }
+                            else {
+                                // CPUのトス打球タイミング（頂点付近で打つ）
+                                if (ball.velocity.y <= 1.0f) {
+                                    ball.Launch(
+                                        ball.position,
+                                        { 0.0f, 3.5f, -9.5f }
+                                    );
+                                }
                             }
                         }
                     }
@@ -271,37 +278,18 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
                     }
                 }
             }
-            // ----------------------------------------------------
-            // ポーズ中のメニュー操作
-            // ----------------------------------------------------
             else if (currentState == GameState::PAUSE) {
-                if (upKey && !upKeyPrev) {
-                    pauseMenuIndex = (pauseMenuIndex + 2) % 3; // 上へ
-                }
-                if (downKey && !downKeyPrev) {
-                    pauseMenuIndex = (pauseMenuIndex + 1) % 3; // 下へ
-                }
+                if (upKey && !upKeyPrev)     pauseMenuIndex = (pauseMenuIndex + 2) % 3;
+                if (downKey && !downKeyPrev) pauseMenuIndex = (pauseMenuIndex + 1) % 3;
 
                 if (enterKey && !enterKeyPrev) {
-                    if (pauseMenuIndex == 0) {
-                        // ① 再開 (RESUME)
-                        currentState = GameState::PLAY;
-                    }
-                    else if (pauseMenuIndex == 1) {
-                        // ② リスタート (RESTART)
-                        ResetAllGame();
-                        currentState = GameState::PLAY;
-                    }
-                    else if (pauseMenuIndex == 2) {
-                        // ③ タイトル画面へ戻る (TITLE)
-                        currentState = GameState::TITLE;
-                    }
+                    if (pauseMenuIndex == 0)      currentState = GameState::PLAY;
+                    else if (pauseMenuIndex == 1) { ResetAllGame(); currentState = GameState::PLAY; }
+                    else if (pauseMenuIndex == 2) currentState = GameState::TITLE;
                 }
             }
 
-            // ----------------------------------------------------
-            // 3Dオブジェクト・UI描画（プレイ中・ポーズ共通）
-            // ----------------------------------------------------
+            // 描画部
             SetupCamera_Perspective(70.0f * 3.14159265f / 180.0f);
             SetCameraPositionAndTarget_UpVecY(
                 VGet(0.0f, 210.0f, -380.0f),
@@ -319,10 +307,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
             ball.Draw();
 
             if (isPlayerServer) {
-                DrawString(10, 10, "Rキー: サーブ発射 (YOUR SERVE)", GetColor(0, 255, 255));
+                if (ball.isTossing) {
+                    DrawString(10, 10, "SPACE / Zキー: サーブを打つ！", GetColor(255, 255, 0));
+                }
+                else {
+                    DrawString(10, 10, "Rキー: トスを上げる (YOUR SERVE)", GetColor(0, 255, 255));
+                }
             }
             else {
-                DrawString(10, 10, "CPU SERVE (自動またはEnterキーで発射)", GetColor(255, 150, 150));
+                DrawString(10, 10, "CPU SERVE", GetColor(255, 150, 150));
             }
 
             std::string spdInfo = (selectedSpeedIndex == 0) ? "[SPEED: 1.0x]" : "[SPEED: 0.5x SLOW]";
@@ -356,16 +349,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
                 messageTimer--;
             }
 
-            // ----------------------------------------------------
-            // ★ ポーズ画面専用オーバレイUI描画
-            // ----------------------------------------------------
             if (currentState == GameState::PAUSE) {
-                // 暗い背景（黒の半透明ボックス）
                 SetDrawBlendMode(DX_BLENDMODE_ALPHA, 180);
                 DrawBox(0, 0, 1280, 720, GetColor(0, 0, 0), TRUE);
                 SetDrawBlendMode(DX_BLENDMODE_NOBLEND, 0);
 
-                // ポーズウィンドウ枠
                 DrawBox(440, 180, 840, 540, GetColor(30, 30, 40), TRUE);
                 DrawBox(440, 180, 840, 540, GetColor(200, 200, 255), FALSE);
 
@@ -377,7 +365,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
                 for (int i = 0; i < 3; i++) {
                     int yPos = 310 + i * 60;
                     if (i == pauseMenuIndex) {
-                        // 選択項目を黄色で強調 & カーソル表示
                         std::string selText = "> " + std::string(menuItems[i]) + " <";
                         DrawString(520, yPos, selText.c_str(), GetColor(255, 255, 0));
                     }
@@ -390,10 +377,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
                 DrawString(510, 490, "↑/↓: 選択  ENTER: 決定", GetColor(200, 200, 200));
             }
         }
-
-        // ====================================================
-        // ④ 勝敗リザルト画面の処理
-        // ====================================================
         else if (currentState == GameState::RESULT) {
             if (enterKey && !enterKeyPrev) {
                 currentState = GameState::TITLE;
@@ -410,6 +393,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
         rKeyPrev = rKey;
         enterKeyPrev = enterKey;
+        spaceKeyPrev = spaceKey;
+        zKeyPrev = zKey;
         leftKeyPrev = leftKey;
         rightKeyPrev = rightKey;
         upKeyPrev = upKey;
