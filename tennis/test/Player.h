@@ -1,16 +1,9 @@
 #pragma once
-#include "DxLib.h"
-#include "Vector3.h"
-#include "Ball.h"
+#include "Character.h"
 
-class Player {
+class Player : public Character {
 public:
-    Vector3 position;
-    float reachRadius;
-
-
     Player(Vector3 startPos);
-    void Update(Ball& ball, float speedFactor = 1.0f);
-    void Draw() const;
+    void Update(Ball& ball, float speedFactor = 1.0f) override;
     void DrawReachArea() const;
 };

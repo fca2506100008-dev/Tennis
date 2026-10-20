@@ -1,14 +1,24 @@
-#pragma once
-#include "DxLib.h"
-#include "Vector3.h"
-#include "Ball.h"
+﻿#pragma once
+#include "Character.h"
 
-class Enemy {
+// 難易度の定義
+enum class Difficulty {
+    EASY,
+    NORMAL,
+    HARD
+};
+
+class Enemy : public Character {
 public:
-    Vector3 position;
-    float speed;
+    float speed;         // 移動速度
+    float accuracy;      // コースの正確さ (0.0f: ランダム 〜 1.0f: 100%正確)
+    int reactionDelay;   // 反応遅れフレーム数（打球判断の遅れ）
+    Difficulty difficulty;
 
     Enemy(Vector3 startPos);
-    void Update(Ball& ball, float speedFactor = 1.0f);
-    void Draw() const;
+
+    // 難易度設定関数の追加
+    void SetDifficulty(Difficulty diff);
+
+    void Update(Ball& ball, float speedFactor = 1.0f) override;
 };

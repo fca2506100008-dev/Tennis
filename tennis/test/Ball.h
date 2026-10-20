@@ -1,6 +1,7 @@
 #pragma once
 #include "DxLib.h"
 #include "Vector3.h"
+#include "ShotData.h"
 
 class Ball {
 public:
@@ -10,15 +11,16 @@ public:
     Vector3 landingPos;
     bool hasLanded;
     bool isMoving;
-    bool isTossing; // トス中フラグ
+    bool isTossing;
+    ShotType currentShotType;
 
     Ball(Vector3 pos, Vector3 vel);
-    void StartToss(Vector3 pos);                   // トス開始
-    void Launch(Vector3 pos, Vector3 vel);         // サーブ・ショット発射
-    void Reset(Vector3 pos);                       // 位置リセット
-    void Update(float speedFactor = 1.0f);          // 物理・座標更新（速度倍率対応）
-    void Draw() const;                             // ボール描画
-    void DrawShadow() const;                       // 影描画
-    void DrawLandingPoint() const;                 // 着地点マーカー描画
-    void DrawPredictMarker() const;                // 落下予測線描画
+    void StartToss(Vector3 pos);
+    void Launch(Vector3 pos, Vector3 vel, ShotType shotType = ShotType::FLAT);
+    void Reset(Vector3 pos);
+    void Update(float speedFactor = 1.0f);
+    void Draw() const;
+    void DrawShadow() const;
+    void DrawLandingPoint() const;
+    void DrawPredictMarker() const;
 };

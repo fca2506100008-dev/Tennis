@@ -3,6 +3,8 @@
 #include "Player.h"
 #include "Enemy.h"
 #include "Court.h"
+#include "SoundManager.h"
+#include "ShotData.h"
 #include <cmath>
 #include <string>
 
@@ -41,6 +43,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     if (DxLib_Init() == -1) return -1;
     SetDrawScreen(DX_SCREEN_BACK);
 
+    // SoundManager の初期化
+    SoundManager::GetInstance().Init();
+
     const Vector3 PLAYER_INIT_POS = { 0.0f, 0.0f, -240.0f };
     const Vector3 ENEMY_INIT_POS = { 0.0f, 0.0f,  240.0f };
 
@@ -57,10 +62,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     bool enterKeyPrev = false;
     bool spaceKeyPrev = false;
     bool zKeyPrev = false;
+    bool xKeyPrev = false;
     bool leftKeyPrev = false;
     bool rightKeyPrev = false;
     bool upKeyPrev = false;
     bool downKeyPrev = false;
+    bool shiftKeyPrev = false;
     bool escKeyPrev = false;
     bool pKeyPrev = false;
 
@@ -72,9 +79,16 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     int playerGames = 0;
     int enemyGames = 0;
 
+    // ゲーム数設定
     const int targetGamesList[] = { 2, 5, 10 };
     int selectedGameIndex = 0;
 
+    // 難易度設定 (0: EASY, 1: NORMAL, 2: HARD)
+    const char* diffNames[] = { "EASY", "NORMAL", "HARD" };
+    const unsigned int diffColors[] = { GetColor(0, 255, 128), GetColor(255, 255, 0), GetColor(255, 80, 80) };
+    int selectedDiffIndex = 1; // 初期値: NORMAL
+
+    // 速度設定
     const float speedList[] = { 1.0f, 0.5f };
     int selectedSpeedIndex = 0;
 
@@ -102,9 +116,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     auto AddPoint = [&](bool isPlayerPoint, const std::string& reason) {
         if (isPlayerPoint) {
             playerScore++;
+            //SoundManager::GetInstance().Play(SE::POINT);
         }
         else {
             enemyScore++;
+            //SoundManager::GetInstance().Play(SE::OUT);
         }
 
         bool gameWon = false;
@@ -120,7 +136,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         if (gameWon) {
             playerScore = 0;
             enemyScore = 0;
-
             isPlayerServer = !isPlayerServer;
 
             int targetGames = targetGamesList[selectedGameIndex];
@@ -154,49 +169,67 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         bool enterKey = CheckHitKey(KEY_INPUT_RETURN) != 0;
         bool spaceKey = CheckHitKey(KEY_INPUT_SPACE) != 0;
         bool zKey = CheckHitKey(KEY_INPUT_Z) != 0;
+        bool xKey = CheckHitKey(KEY_INPUT_X) != 0;
         bool leftKey = CheckHitKey(KEY_INPUT_LEFT) != 0;
         bool rightKey = CheckHitKey(KEY_INPUT_RIGHT) != 0;
         bool upKey = CheckHitKey(KEY_INPUT_UP) != 0;
         bool downKey = CheckHitKey(KEY_INPUT_DOWN) != 0;
+        bool shiftKey = (CheckHitKey(KEY_INPUT_LSHIFT) != 0) || (CheckHitKey(KEY_INPUT_RSHIFT) != 0);
         bool escKey = CheckHitKey(KEY_INPUT_ESCAPE) != 0;
         bool pKey = CheckHitKey(KEY_INPUT_P) != 0;
 
         float currentSpeedFactor = speedList[selectedSpeedIndex];
 
         if (currentState == GameState::TITLE) {
-            if (leftKey && !leftKeyPrev)  selectedGameIndex = (selectedGameIndex + 2) % 3;
+            // 左右キーでゲーム数切り替え
+            if (leftKey && !leftKeyPrev)   selectedGameIndex = (selectedGameIndex + 2) % 3;
             if (rightKey && !rightKeyPrev) selectedGameIndex = (selectedGameIndex + 1) % 3;
 
-            if ((upKey && !upKeyPrev) || (downKey && !downKeyPrev)) {
+            // 上下キーでCPU難易度切り替え
+            if (upKey && !upKeyPrev)     selectedDiffIndex = (selectedDiffIndex + 2) % 3;
+            if (downKey && !downKeyPrev) selectedDiffIndex = (selectedDiffIndex + 1) % 3;
+
+            // SHIFTキーでゲーム速度切り替え (1.0x / 0.5x)
+            if (shiftKey && !shiftKeyPrev) {
                 selectedSpeedIndex = (selectedSpeedIndex + 1) % 2;
             }
 
             if (enterKey && !enterKeyPrev) {
                 ResetAllGame();
+                enemy.SetDifficulty(static_cast<Difficulty>(selectedDiffIndex));
                 currentState = GameState::PLAY;
             }
 
+            // タイトル画面描画
             SetFontSize(64);
-            DrawString(400, 140, "3D TENNIS GAME", GetColor(255, 255, 255));
+            DrawString(400, 100, "3D TENNIS GAME", GetColor(255, 255, 255));
 
             SetFontSize(20);
-            DrawString(430, 270, "MATCH SETTING (Left/Right Key):", GetColor(200, 200, 255));
+            DrawString(430, 210, "MATCH SETTING (Left / Right Key):", GetColor(200, 200, 255));
             std::string modeText = "<  " + std::to_string(targetGamesList[selectedGameIndex]) + " GAMES MATCH  >";
-            SetFontSize(28);
-            DrawString(450, 300, modeText.c_str(), GetColor(255, 255, 0));
+            SetFontSize(26);
+            DrawString(450, 235, modeText.c_str(), GetColor(255, 255, 0));
 
             SetFontSize(20);
-            DrawString(430, 370, "SPEED SETTING (Up/Down Key):", GetColor(200, 200, 255));
-            std::string speedText = (selectedSpeedIndex == 0) ? "^  SPEED: 1.0x (NORMAL)  v" : "^  SPEED: 0.5x (SLOW)  v";
-            SetFontSize(28);
-            DrawString(440, 400, speedText.c_str(), (selectedSpeedIndex == 0) ? GetColor(0, 255, 100) : GetColor(255, 150, 0));
+            DrawString(430, 290, "CPU DIFFICULTY (Up / Down Key):", GetColor(200, 200, 255));
+            std::string diffText = "^  DIFFICULTY: " + std::string(diffNames[selectedDiffIndex]) + "  v";
+            SetFontSize(26);
+            DrawString(430, 315, diffText.c_str(), diffColors[selectedDiffIndex]);
+
+            // 速度設定表示
+            SetFontSize(20);
+            DrawString(430, 370, "SPEED SETTING (SHIFT Key):", GetColor(200, 200, 255));
+            std::string speedText = (selectedSpeedIndex == 0) ? "[ SHIFT ] SPEED: 1.0x (NORMAL)" : "[ SHIFT ] SPEED: 0.5x (SLOW)";
+            SetFontSize(26);
+            DrawString(420, 395, speedText.c_str(), (selectedSpeedIndex == 0) ? GetColor(0, 255, 100) : GetColor(255, 150, 0));
 
             SetFontSize(28);
-            DrawString(460, 490, "PRESS ENTER TO START", GetColor(0, 255, 255));
+            DrawString(460, 480, "PRESS ENTER TO START", GetColor(0, 255, 255));
 
             SetFontSize(16);
-            DrawString(430, 580, "操作方法: 矢印キー(移動/選択) / R(トス) -> SPACE/Z(サーブ打球)", GetColor(200, 200, 200));
-            DrawString(430, 600, "ESC or Pキー: ポーズ", GetColor(200, 200, 200));
+            DrawString(380, 560, "操作方法: 矢印キー(移動/設定) / SHIFT(速度) / R(トス)", GetColor(200, 200, 200));
+            DrawString(380, 585, "ショット: SPACE(フラット) / Z(トップスピン) / X(スライス)", GetColor(255, 255, 100));
+            DrawString(380, 610, "ESC or Pキー: ポーズ", GetColor(200, 200, 200));
         }
         else if (currentState == GameState::PLAY || currentState == GameState::PAUSE) {
 
@@ -215,28 +248,30 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
                 if (!ball.isMoving) {
                     if (messageTimer <= 0) {
                         if (isPlayerServer) {
-                            // 静止中はプレイヤーの手元にボール配置
                             if (!ball.isTossing) {
                                 ball.position = { player.position.x, player.position.y + 10.0f, player.position.z + 5.0f };
 
-                                // ① Rキーでトスアップ開始
                                 if (rKey && !rKeyPrev) {
                                     ball.StartToss({ player.position.x, player.position.y + 12.0f, player.position.z + 5.0f });
                                 }
                             }
-                            // ② トス中にSPACEまたはZキーでサーブ打球！
                             else {
-                                bool shotInput = (spaceKey && !spaceKeyPrev) || (zKey && !zKeyPrev);
+                                bool shotInput = (spaceKey && !spaceKeyPrev) || (zKey && !zKeyPrev) || (xKey && !xKeyPrev);
                                 if (shotInput && ball.position.y >= 20.0f) {
+                                    ShotType sType = ShotType::FLAT;
+                                    if (zKey && !zKeyPrev) sType = ShotType::TOPSPIN;
+                                    if (xKey && !xKeyPrev) sType = ShotType::SLICE;
+
                                     ball.Launch(
                                         ball.position,
-                                        { 0.0f, 3.5f, 9.5f } // 鋭く相手コートへ発射
+                                        { 0.0f, 3.5f, 9.5f },
+                                        sType
                                     );
                                 }
                             }
                         }
                         else {
-                            // CPUサーブ（全自動）
+                            // CPUサーブ
                             if (!ball.isTossing) {
                                 ball.position = { enemy.position.x, enemy.position.y + 10.0f, enemy.position.z - 5.0f };
 
@@ -248,11 +283,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
                                 }
                             }
                             else {
-                                // CPUのトス打球タイミング（頂点付近で打つ）
                                 if (ball.velocity.y <= 1.0f) {
                                     ball.Launch(
                                         ball.position,
-                                        { 0.0f, 3.5f, -9.5f }
+                                        { 0.0f, 3.5f, -9.5f },
+                                        ShotType::FLAT
                                     );
                                 }
                             }
@@ -308,7 +343,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
             if (isPlayerServer) {
                 if (ball.isTossing) {
-                    DrawString(10, 10, "SPACE / Zキー: サーブを打つ！", GetColor(255, 255, 0));
+                    DrawString(10, 10, "SPACE(フラット) / Z(スピン) / X(スライス): サーブ！", GetColor(255, 255, 0));
                 }
                 else {
                     DrawString(10, 10, "Rキー: トスを上げる (YOUR SERVE)", GetColor(0, 255, 255));
@@ -318,8 +353,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
                 DrawString(10, 10, "CPU SERVE", GetColor(255, 150, 150));
             }
 
-            std::string spdInfo = (selectedSpeedIndex == 0) ? "[SPEED: 1.0x]" : "[SPEED: 0.5x SLOW]";
-            DrawString(10, 30, spdInfo.c_str(), (selectedSpeedIndex == 0) ? GetColor(200, 200, 200) : GetColor(255, 150, 0));
+            // 難易度とスピードの表示
+            std::string statusInfo = "[CPU: " + std::string(diffNames[selectedDiffIndex]) + "]";
+            if (selectedSpeedIndex != 0) statusInfo += " [SLOW 0.5x]";
+            DrawString(10, 30, statusInfo.c_str(), (selectedSpeedIndex == 0) ? diffColors[selectedDiffIndex] : GetColor(255, 150, 0));
             DrawString(10, 50, "ESCキー / Pキー: ポーズ", GetColor(200, 200, 200));
 
             // スコアボード
@@ -395,10 +432,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         enterKeyPrev = enterKey;
         spaceKeyPrev = spaceKey;
         zKeyPrev = zKey;
+        xKeyPrev = xKey;
         leftKeyPrev = leftKey;
         rightKeyPrev = rightKey;
         upKeyPrev = upKey;
         downKeyPrev = downKey;
+        shiftKeyPrev = shiftKey;
         escKeyPrev = escKey;
         pKeyPrev = pKey;
 
