@@ -23,6 +23,7 @@
     <ClInclude Include="Character.h" />
     <ClInclude Include="Court.h" />
     <ClInclude Include="Enemy.h" />
+    <ClInclude Include="FpsManager.h" />
     <ClInclude Include="Player.h" />
     <ClInclude Include="ShotData.h" />
     <ClInclude Include="SoundManager.h" />
