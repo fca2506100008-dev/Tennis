@@ -42,6 +42,20 @@ std::string GetScoreText(int pScore, int eScore) {
     return pStr + " - " + eStr;
 }
 
+// 縁取り文字列描画ヘルパー関数
+void DrawBorderedString(int x, int y, const char* string, unsigned int color, unsigned int borderColor = GetColor(0, 0, 0)) {
+    DrawString(x - 1, y, string, borderColor);
+    DrawString(x + 1, y, string, borderColor);
+    DrawString(x, y - 1, string, borderColor);
+    DrawString(x, y + 1, string, borderColor);
+    DrawString(x - 1, y - 1, string, borderColor);
+    DrawString(x + 1, y - 1, string, borderColor);
+    DrawString(x - 1, y + 1, string, borderColor);
+    DrawString(x + 1, y + 1, string, borderColor);
+
+    DrawString(x, y, string, color);
+}
+
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
     ChangeWindowMode(TRUE);
     SetGraphMode(1280, 720, 32);
@@ -53,6 +67,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     SetBackgroundColor(30, 140, 50);
     SoundManager::GetInstance().Init();
+
+    // ★ タイトル用画像とゲーム中用背景画像の読み込み
+    int titleBgHandle = LoadGraph("title_bg.png.jpg");
+    int gameBgHandle = LoadGraph("game_bg.png.jpg");
 
     FpsManager fpsManager;
 
@@ -101,7 +119,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     const unsigned int diffColors[] = { GetColor(0, 255, 128), GetColor(255, 255, 0), GetColor(255, 80, 80) };
     int selectedDiffIndex = 1;
 
-    // ★ 速度リストを 1.0x, 1.5x, 2.0x, 0.5x に拡張
     const float speedList[] = { 1.0f, 1.5f, 2.0f, 0.5f };
     const char* speedNames[] = { "1.0x (NORMAL)", "1.5x (FAST)", "2.0x (SUPER FAST)", "0.5x (SLOW)" };
     const unsigned int speedColors[] = { GetColor(0, 255, 100), GetColor(255, 200, 0), GetColor(255, 80, 80), GetColor(100, 200, 255) };
@@ -228,7 +245,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         int mouseInput = GetMouseInput();
         bool mouseLeft = (mouseInput & MOUSE_INPUT_LEFT) != 0;
 
-        // ★ 移動・ゲームスピードの速度補正（120FPS用に 0.5f 補正）
         float currentSpeedFactor = speedList[selectedSpeedIndex] * 0.5f;
 
         if (currentState == GameState::TITLE) {
@@ -238,7 +254,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
             if (upKey && !upKeyPrev)     selectedDiffIndex = (selectedDiffIndex + 2) % 3;
             if (downKey && !downKeyPrev) selectedDiffIndex = (selectedDiffIndex + 1) % 3;
 
-            // ★ SHIFTキーで 1.0x -> 1.5x -> 2.0x -> 0.5x を切り替え
             if (shiftKey && !shiftKeyPrev) {
                 selectedSpeedIndex = (selectedSpeedIndex + 1) % 4;
             }
@@ -249,34 +264,38 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
                 currentState = GameState::PLAY;
             }
 
+            if (titleBgHandle != -1) {
+                DrawExtendGraph(0, 0, 1280, 720, titleBgHandle, FALSE);
+            }
+
             SetFontSize(64);
-            DrawString(400, 100, "3D TENNIS GAME", GetColor(255, 255, 255));
+            DrawBorderedString(400, 100, "3D TENNIS GAME", GetColor(255, 255, 255));
 
             SetFontSize(20);
-            DrawString(430, 210, "MATCH SETTING (Left / Right Key):", GetColor(200, 200, 255));
+            DrawBorderedString(430, 210, "MATCH SETTING (Left / Right Key):", GetColor(200, 200, 255));
             std::string modeText = "<  " + std::to_string(targetGamesList[selectedGameIndex]) + " GAMES MATCH  >";
             SetFontSize(26);
-            DrawString(450, 235, modeText.c_str(), GetColor(255, 255, 0));
+            DrawBorderedString(450, 235, modeText.c_str(), GetColor(255, 255, 0));
 
             SetFontSize(20);
-            DrawString(430, 290, "CPU DIFFICULTY (Up / Down Key):", GetColor(200, 200, 255));
+            DrawBorderedString(430, 290, "CPU DIFFICULTY (Up / Down Key):", GetColor(200, 200, 255));
             std::string diffText = "^  DIFFICULTY: " + std::string(diffNames[selectedDiffIndex]) + "  v";
             SetFontSize(26);
-            DrawString(430, 315, diffText.c_str(), diffColors[selectedDiffIndex]);
+            DrawBorderedString(430, 315, diffText.c_str(), diffColors[selectedDiffIndex]);
 
             SetFontSize(20);
-            DrawString(430, 370, "SPEED SETTING (SHIFT Key):", GetColor(200, 200, 255));
+            DrawBorderedString(430, 370, "SPEED SETTING (SHIFT Key):", GetColor(200, 200, 255));
             std::string speedText = "[ SHIFT ] SPEED: " + std::string(speedNames[selectedSpeedIndex]);
             SetFontSize(26);
-            DrawString(420, 395, speedText.c_str(), speedColors[selectedSpeedIndex]);
+            DrawBorderedString(420, 395, speedText.c_str(), speedColors[selectedSpeedIndex]);
 
             SetFontSize(28);
-            DrawString(460, 480, "PRESS ENTER TO START", GetColor(0, 255, 255));
+            DrawBorderedString(460, 480, "PRESS ENTER TO START", GetColor(0, 255, 255));
 
             SetFontSize(16);
-            DrawString(380, 560, "操作方法: WASD (移動) / SHIFT (速度) / Rキー (トス)", GetColor(200, 200, 200));
-            DrawString(380, 585, "サーブ狙い: A / D キー  /  ショット: 左クリック", GetColor(255, 255, 100));
-            DrawString(380, 610, "ESC or Pキー: ポーズ", GetColor(200, 200, 200));
+            DrawBorderedString(380, 560, "操作方法: WASD (移動) / SHIFT (速度) / Rキー (トス)", GetColor(200, 200, 200));
+            DrawBorderedString(380, 585, "サーブ狙い: A / D キー  /  ショット: 左クリック", GetColor(255, 255, 100));
+            DrawBorderedString(380, 610, "ESC or Pキー: ポーズ", GetColor(200, 200, 200));
         }
         else if (currentState == GameState::PLAY || currentState == GameState::PAUSE) {
 
@@ -392,6 +411,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
                     else if (pauseMenuIndex == 1) { ResetAllGame(); currentState = GameState::PLAY; }
                     else if (pauseMenuIndex == 2) currentState = GameState::TITLE;
                 }
+            }
+
+            // ★ 3D描画（コート・キャラ・ボール）を行う前に、ゲーム中背景画像を描画
+            if (gameBgHandle != -1) {
+                DrawExtendGraph(0, 0, 1280, 720, gameBgHandle, FALSE);
             }
 
             SetupCamera_Perspective(70.0f * 3.14159265f / 180.0f);
@@ -526,6 +550,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
         fpsManager.Wait();
     }
+
+    if (titleBgHandle != -1) DeleteGraph(titleBgHandle);
+    if (gameBgHandle != -1)  DeleteGraph(gameBgHandle);
 
     DxLib_End();
     return 0;
