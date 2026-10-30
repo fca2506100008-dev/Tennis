@@ -150,3 +150,48 @@ void Ball::DrawPredictMarker() const {
         }
     }
 }
+
+// ★ 追加：タイミング指導用ターゲットリング描画（描画のみで物理計算には非干渉）
+void Ball::DrawTimingRing() const {
+    // プレイヤー側へ向かって飛んでいるボール、またはトス上げ時のみ描画
+    bool isPlayerShotOpportunity = (isTossing && position.z < 0.0f) ||
+        (isMoving && velocity.z < 0.0f && position.z < 50.0f);
+
+    if (!isPlayerShotOpportunity) return;
+
+    const float INNER_RADIUS = 8.0f;
+    float targetHeight = 20.0f;
+    float heightDiff = position.y - targetHeight;
+    if (heightDiff < 0.0f) heightDiff = 0.0f;
+
+    // 高さに応じて収縮する外径
+    float outerRadius = INNER_RADIUS + (heightDiff * 0.6f);
+    Vector3 ringPos = position;
+    ringPos.y = 0.5f;
+
+    const int DIV = 24;
+
+    // 1. 内側の固定基準円（緑色）
+    for (int i = 0; i < DIV; i++) {
+        float a1 = 2.0f * 3.14159265f * i / DIV;
+        float a2 = 2.0f * 3.14159265f * (i + 1) / DIV;
+
+        VECTOR p1 = VGet(ringPos.x + cosf(a1) * INNER_RADIUS, ringPos.y, ringPos.z + sinf(a1) * INNER_RADIUS);
+        VECTOR p2 = VGet(ringPos.x + cosf(a2) * INNER_RADIUS, ringPos.y, ringPos.z + sinf(a2) * INNER_RADIUS);
+
+        DrawLine3D(p1, p2, GetColor(0, 255, 128));
+    }
+
+    // 2. 高さに応じて縮まるアプローチ円（重ね合わせ時に赤色）
+    unsigned int ringColor = (outerRadius - INNER_RADIUS < 5.0f) ? GetColor(255, 50, 50) : GetColor(255, 255, 0);
+
+    for (int i = 0; i < DIV; i++) {
+        float a1 = 2.0f * 3.14159265f * i / DIV;
+        float a2 = 2.0f * 3.14159265f * (i + 1) / DIV;
+
+        VECTOR p1 = VGet(ringPos.x + cosf(a1) * outerRadius, ringPos.y, ringPos.z + sinf(a1) * outerRadius);
+        VECTOR p2 = VGet(ringPos.x + cosf(a2) * outerRadius, ringPos.y, ringPos.z + sinf(a2) * outerRadius);
+
+        DrawLine3D(p1, p2, ringColor);
+    }
+}

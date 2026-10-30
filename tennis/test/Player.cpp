@@ -8,22 +8,52 @@ Player::Player(Vector3 startPos)
 }
 
 void Player::Update(Ball& ball, float speedFactor) {
-    float moveSpeed = 3.5f * speedFactor;
+    // SHIFTキー押下時のダッシュ制御（1.6倍）
+    bool isShiftPressed = (CheckHitKey(KEY_INPUT_LSHIFT) != 0) || (CheckHitKey(KEY_INPUT_RSHIFT) != 0);
+    float dashMultiplier = isShiftPressed ? 1.6f : 1.0f;
+    float moveSpeed = 3.5f * dashMultiplier * speedFactor;
 
-    // 自分がサーブを打つ前（ボール停止中かつボールが自分側にある）かどうかの判定
+    // 自分がサーブを打つ前（ボールが未移動、かつ自分側のコートにいる）判定
     bool isMyServeWaiting = (!ball.isMoving && ball.position.z < 0.0f);
 
-    // A / D キーで左右移動（サーブ前後を問わず可能）
-    if (CheckHitKey(KEY_INPUT_A)) position.x -= moveSpeed;
-    if (CheckHitKey(KEY_INPUT_D)) position.x += moveSpeed;
+    // サーブ待機中のサイド記憶・ロック制御
+    static bool serveFromRight = true;
+    static bool isServingLastFrame = false;
 
-    // W / S キーで前後移動（自分のサーブ待機中のみ前後移動をロック）
-    if (!isMyServeWaiting) {
-        if (CheckHitKey(KEY_INPUT_W)) position.z += moveSpeed;
-        if (CheckHitKey(KEY_INPUT_S)) position.z -= moveSpeed;
+    if (isMyServeWaiting) {
+        // サーブ待機状態に入った最初の1フレームで、初期配置（position.x >= 0）から打つサイドを決定・ロック
+        if (!isServingLastFrame) {
+            serveFromRight = (position.x >= 0.0f);
+        }
+
+        // A / D キー（または十字キー左右）で左右移動
+        if (CheckHitKey(KEY_INPUT_A) || CheckHitKey(KEY_INPUT_LEFT))  position.x -= moveSpeed;
+        if (CheckHitKey(KEY_INPUT_D) || CheckHitKey(KEY_INPUT_RIGHT)) position.x += moveSpeed;
+
+        // センターライン（x = 0.0f）跨ぎ防止ガード
+        if (serveFromRight) {
+            // 右サイド（デュースサイド）からのサーブ：センターラインより左（x < 0.0f）へ行けない
+            if (position.x < 0.0f) position.x = 0.0f;
+        }
+        else {
+            // 左サイド（アドバンテージサイド）からのサーブ：センターラインより右（x > 0.0f）へ行けない
+            if (position.x > 0.0f) position.x = 0.0f;
+        }
+    }
+    else {
+        // ラリー中の左右移動
+        if (CheckHitKey(KEY_INPUT_A) || CheckHitKey(KEY_INPUT_LEFT))  position.x -= moveSpeed;
+        if (CheckHitKey(KEY_INPUT_D) || CheckHitKey(KEY_INPUT_RIGHT)) position.x += moveSpeed;
+
+        // W / S キー（または十字キー上下）で前後移動（サーブ待機中は前後移動不可）
+        if (CheckHitKey(KEY_INPUT_W) || CheckHitKey(KEY_INPUT_UP))   position.z += moveSpeed;
+        if (CheckHitKey(KEY_INPUT_S) || CheckHitKey(KEY_INPUT_DOWN)) position.z -= moveSpeed;
     }
 
-    // プレイヤーの移動制限エリア
+    // 前フレームのサーブ待機状態を更新
+    isServingLastFrame = isMyServeWaiting;
+
+    // プレイヤーの移動制限エリア（コート範囲内）
     if (position.x < -120.0f) position.x = -120.0f;
     if (position.x > 120.0f) position.x = 120.0f;
     if (position.z < -300.0f) position.z = -300.0f;
@@ -31,7 +61,7 @@ void Player::Update(Ball& ball, float speedFactor) {
 
     if (!ball.isMoving) return;
 
-    // マウス左クリックでショット実行
+    // マウス左クリックでショット実行（ラリー中）
     bool mouseLeft = (GetMouseInput() & MOUSE_INPUT_LEFT) != 0;
 
     if (mouseLeft) {
@@ -45,8 +75,8 @@ void Player::Update(Ball& ball, float speedFactor) {
 
             // A / D キーで狙う左右コースの補正
             float dirX = 0.0f;
-            if (CheckHitKey(KEY_INPUT_A)) dirX = -0.8f;
-            if (CheckHitKey(KEY_INPUT_D)) dirX = 0.8f;
+            if (CheckHitKey(KEY_INPUT_A) || CheckHitKey(KEY_INPUT_LEFT))  dirX = -0.8f;
+            if (CheckHitKey(KEY_INPUT_D) || CheckHitKey(KEY_INPUT_RIGHT)) dirX = 0.8f;
 
             ShotType shot = ShotType::FLAT;
             ShotConfig config = GetShotConfig(shot);
@@ -91,4 +121,9 @@ void Player::DrawReachArea() const {
     }
 
     DrawPolygonIndexed3D(vertex, DIV, index, DIV - 2, DX_NONE_GRAPH, FALSE);
+}
+
+// LNK2019 未解決外部シンボル参照エラー対策（インパクトエフェクト描画関数の定義）
+void Player::DrawImpactEffect() const {
+    // ショットヒット時のエフェクト処理用（必要に応じて記述）
 }

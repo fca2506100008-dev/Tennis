@@ -23,4 +23,7 @@ public:
     void DrawShadow() const;
     void DrawLandingPoint() const;
     void DrawPredictMarker() const;
+
+    // ★ 演出用描画（物理演算・変数構造には影響を与えない追加関数）
+    void DrawTimingRing() const;
 };

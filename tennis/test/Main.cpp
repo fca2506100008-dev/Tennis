@@ -1,4 +1,4 @@
-#include "DxLib.h"
+Ôªø#include "DxLib.h"
 #include "Ball.h"
 #include "Player.h"
 #include "Enemy.h"
@@ -42,7 +42,6 @@ std::string GetScoreText(int pScore, int eScore) {
     return pStr + " - " + eStr;
 }
 
-// âèéÊÇËï∂éöóÒï`âÊÉwÉãÉpÅ[ä÷êî
 void DrawBorderedString(int x, int y, const char* string, unsigned int color, unsigned int borderColor = GetColor(0, 0, 0)) {
     DrawString(x - 1, y, string, borderColor);
     DrawString(x + 1, y, string, borderColor);
@@ -68,14 +67,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     SetBackgroundColor(30, 140, 50);
     SoundManager::GetInstance().Init();
 
-    // Åö É^ÉCÉgÉãópâÊëúÇ∆ÉQÅ[ÉÄíÜópîwåiâÊëúÇÃì«Ç›çûÇ›
     int titleBgHandle = LoadGraph("title_bg.png.jpg");
     int gameBgHandle = LoadGraph("game_bg.png.jpg");
 
     FpsManager fpsManager;
 
-    const Vector3 PLAYER_INIT_POS = { 0.0f, 0.0f, -240.0f };
-    const Vector3 ENEMY_INIT_POS = { 0.0f, 0.0f,  240.0f };
+    const Vector3 PLAYER_INIT_POS = { 35.0f, 0.0f, -240.0f };
+    const Vector3 ENEMY_INIT_POS = { -35.0f, 0.0f,  240.0f };
 
     Player player(PLAYER_INIT_POS);
     Enemy enemy(ENEMY_INIT_POS);
@@ -115,8 +113,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     const int targetGamesList[] = { 2, 5, 10 };
     int selectedGameIndex = 0;
 
-    const char* diffNames[] = { "EASY", "NORMAL", "HARD" };
-    const unsigned int diffColors[] = { GetColor(0, 255, 128), GetColor(255, 255, 0), GetColor(255, 80, 80) };
+    const char* diffNames[] = { "EASY", "NORMAL", "HARD", "SUPER HARD" };
+    const unsigned int diffColors[] = {
+        GetColor(0, 255, 128),
+        GetColor(255, 255, 0),
+        GetColor(255, 80, 80),
+        GetColor(255, 50, 255)
+    };
     int selectedDiffIndex = 1;
 
     const float speedList[] = { 1.0f, 1.5f, 2.0f, 0.5f };
@@ -129,6 +132,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     int faultCount = 0;
     bool isServeRally = false;
+    float serveStartX = 0.0f; // ‚òÖ „Çµ„Éº„Éñ„ÇíÊâì„Å£„ÅüÁû¨Èñì„ÅÆ„Çµ„Éº„Éê„Éº‰ΩçÁΩÆ„ÇíË®òÈå≤„Åô„ÇãÂ§âÊï∞
 
     GameState currentState = GameState::TITLE;
     std::string winnerText = "";
@@ -138,18 +142,22 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     auto ResetServePos = [&]() {
         int totalPoints = playerScore + enemyScore;
-        float sideX = (totalPoints % 2 == 0) ? 45.0f : -45.0f;
+        float serverX = (totalPoints % 2 == 0) ? 35.0f : -35.0f;
+        float receiverX = -serverX;
 
         if (isPlayerServer) {
-            player.position = { sideX, 0.0f, -240.0f };
-            enemy.position = { -sideX, 0.0f, 240.0f };
+            player.position = { serverX, 0.0f, -240.0f };
+            enemy.position = { receiverX, 0.0f, 240.0f };
             ball.Reset({ player.position.x, player.position.y + 10.0f, player.position.z + 5.0f });
         }
         else {
-            enemy.position = { sideX, 0.0f, 240.0f };
-            player.position = { -sideX, 0.0f, -240.0f };
+            enemy.position = { serverX, 0.0f, 240.0f };
+            player.position = { receiverX, 0.0f, -240.0f };
             ball.Reset({ enemy.position.x, enemy.position.y + 10.0f, enemy.position.z - 5.0f });
         }
+
+        ball.isTossing = false;
+        ball.isMoving = false;
         cpuServeTimer = 0;
         };
 
@@ -174,7 +182,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         }
         else {
             enemyScore++;
-            //SoundManager::GetInstance().Play(SE::OUT);
         }
 
         bool gameWon = false;
@@ -208,18 +215,34 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         messageTimer = 120;
         };
 
-    auto IsInServiceBox = [&](Vector3 pos, bool serverIsPlayer, float serverX) -> bool {
-        const float MARGIN = 3.0f;
+    // „Çµ„Éº„Éì„Çπ„Éú„ÉÉ„ÇØ„ÇπÂà§ÂÆö
+    auto IsInServiceBox = [&](Vector3 pos, bool serverIsPlayer, float sX) -> bool {
+        const float MARGIN = 3.0f; // Âà§ÂÆö„ÅÇ„Åù„Å≥ÂπÖ
+        float halfWidth = SINGLES_WIDTH * 0.5f; // 45.0f
 
         if (serverIsPlayer) {
-            if (pos.z < -MARGIN || pos.z > SERVICE_LINE_Z + MARGIN) return false;
-            if (serverX > 0.0f) return (pos.x >= -SINGLES_WIDTH - MARGIN && pos.x <= MARGIN);
-            else                return (pos.x >= -MARGIN && pos.x <= SINGLES_WIDTH + MARGIN);
+            if (pos.z < -MARGIN || pos.z >(SERVICE_LINE_Z + MARGIN)) return false;
+
+            if (sX >= 0.0f) {
+                // Âè≥„Çµ„Éº„Éñ ‚ûî Â••„ÅÆ„ÄêÂ∑¶„Äë„Éú„ÉÉ„ÇØ„Çπ (X: -45.0f „Äú 0.0f)
+                return (pos.x >= -halfWidth - MARGIN && pos.x <= MARGIN);
+            }
+            else {
+                // Â∑¶„Çµ„Éº„Éñ ‚ûî Â••„ÅÆ„ÄêÂè≥„Äë„Éú„ÉÉ„ÇØ„Çπ (X: 0.0f „Äú 45.0f)
+                return (pos.x >= -MARGIN && pos.x <= halfWidth + MARGIN);
+            }
         }
         else {
-            if (pos.z > MARGIN || pos.z < -SERVICE_LINE_Z - MARGIN) return false;
-            if (serverX > 0.0f) return (pos.x >= -SINGLES_WIDTH - MARGIN && pos.x <= MARGIN);
-            else                return (pos.x >= -MARGIN && pos.x <= SINGLES_WIDTH + MARGIN);
+            if (pos.z > MARGIN || pos.z < (-SERVICE_LINE_Z - MARGIN)) return false;
+
+            if (sX >= 0.0f) {
+                // CPUÂè≥„Çµ„Éº„Éñ ‚ûî ÊâãÂâç„ÅÆ„ÄêÂ∑¶„Äë„Éú„ÉÉ„ÇØ„Çπ (X: -45.0f „Äú 0.0f)
+                return (pos.x >= -halfWidth - MARGIN && pos.x <= MARGIN);
+            }
+            else {
+                // CPUÂ∑¶„Çµ„Éº„Éñ ‚ûî ÊâãÂâç„ÅÆ„ÄêÂè≥„Äë„Éú„ÉÉ„ÇØ„Çπ (X: 0.0f „Äú 45.0f)
+                return (pos.x >= -MARGIN && pos.x <= halfWidth + MARGIN);
+            }
         }
         };
 
@@ -251,8 +274,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
             if (leftKey && !leftKeyPrev)   selectedGameIndex = (selectedGameIndex + 2) % 3;
             if (rightKey && !rightKeyPrev) selectedGameIndex = (selectedGameIndex + 1) % 3;
 
-            if (upKey && !upKeyPrev)     selectedDiffIndex = (selectedDiffIndex + 2) % 3;
-            if (downKey && !downKeyPrev) selectedDiffIndex = (selectedDiffIndex + 1) % 3;
+            if (upKey && !upKeyPrev)     selectedDiffIndex = (selectedDiffIndex + 3) % 4;
+            if (downKey && !downKeyPrev) selectedDiffIndex = (selectedDiffIndex + 1) % 4;
 
             if (shiftKey && !shiftKeyPrev) {
                 selectedSpeedIndex = (selectedSpeedIndex + 1) % 4;
@@ -281,7 +304,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
             DrawBorderedString(430, 290, "CPU DIFFICULTY (Up / Down Key):", GetColor(200, 200, 255));
             std::string diffText = "^  DIFFICULTY: " + std::string(diffNames[selectedDiffIndex]) + "  v";
             SetFontSize(26);
-            DrawBorderedString(430, 315, diffText.c_str(), diffColors[selectedDiffIndex]);
+            DrawBorderedString(410, 315, diffText.c_str(), diffColors[selectedDiffIndex]);
 
             SetFontSize(20);
             DrawBorderedString(430, 370, "SPEED SETTING (SHIFT Key):", GetColor(200, 200, 255));
@@ -293,9 +316,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
             DrawBorderedString(460, 480, "PRESS ENTER TO START", GetColor(0, 255, 255));
 
             SetFontSize(16);
-            DrawBorderedString(380, 560, "ëÄçÏï˚ñ@: WASD (à⁄ìÆ) / SHIFT (ë¨ìx) / RÉLÅ[ (ÉgÉX)", GetColor(200, 200, 200));
-            DrawBorderedString(380, 585, "ÉTÅ[Éuë_Ç¢: A / D ÉLÅ[  /  ÉVÉáÉbÉg: ç∂ÉNÉäÉbÉN", GetColor(255, 255, 100));
-            DrawBorderedString(380, 610, "ESC or PÉLÅ[: É|Å[ÉY", GetColor(200, 200, 200));
+            DrawBorderedString(380, 560, "Êìç‰ΩúÊñπÊ≥ï: WASD (ÁßªÂãï) / SHIFT (ÈÄüÂ∫¶/„ÉÄ„ÉÉ„Ç∑„É•) / R„Ç≠„Éº („Éà„Çπ)", GetColor(200, 200, 200));
+            DrawBorderedString(380, 585, "„Çµ„Éº„ÉñÁãô„ÅÑ: A / D „Ç≠„Éº  /  „Ç∑„Éß„ÉÉ„Éà: Â∑¶„ÇØ„É™„ÉÉ„ÇØ", GetColor(255, 255, 100));
+            DrawBorderedString(380, 610, "ESC or P„Ç≠„Éº: „Éù„Éº„Ç∫", GetColor(200, 200, 200));
         }
         else if (currentState == GameState::PLAY || currentState == GameState::PAUSE) {
 
@@ -325,13 +348,18 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
                                 if (shotInput && ball.position.y >= 20.0f) {
                                     ShotType sType = ShotType::FLAT;
 
-                                    float targetX = (player.position.x > 0.0f) ? -35.0f : 35.0f;
-                                    if (aKey) targetX -= 20.0f;
-                                    if (dKey) targetX += 20.0f;
+                                    // Êâì„Å£„ÅüÊôÇÁÇπ„ÅÆ„Éó„É¨„Ç§„É§„Éº‰ΩçÁΩÆ„ÇíË®òÊÜ∂ÔºÅ
+                                    serveStartX = player.position.x;
 
-                                    float velX = (targetX - player.position.x) * 0.022f;
+                                    float targetX = (serveStartX >= 0.0f) ? -22.5f : 22.5f;
+                                    if (aKey) targetX -= 10.0f;
+                                    if (dKey) targetX += 10.0f;
 
-                                    ball.Launch(ball.position, { velX, 3.9f, 10.4f }, sType);
+                                    float velX = (targetX - serveStartX) * 0.018f;
+                                    float serveVelY = 3.7f;
+                                    float serveVelZ = 10.0f;
+
+                                    ball.Launch(ball.position, { velX, serveVelY, serveVelZ }, sType);
                                     isServeRally = true;
                                 }
                             }
@@ -349,10 +377,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
                             }
                             else {
                                 if (ball.velocity.y <= 1.0f) {
-                                    float targetX = (enemy.position.x > 0.0f) ? -35.0f : 35.0f;
-                                    float velX = (targetX - enemy.position.x) * 0.022f;
+                                    // Êâì„Å£„ÅüÊôÇÁÇπ„ÅÆCPU‰ΩçÁΩÆ„ÇíË®òÊÜ∂ÔºÅ
+                                    serveStartX = enemy.position.x;
 
-                                    ball.Launch(ball.position, { velX, 3.9f, -10.4f }, ShotType::FLAT);
+                                    float targetX = (serveStartX >= 0.0f) ? -22.5f : 22.5f;
+                                    float velX = (targetX - serveStartX) * 0.018f;
+
+                                    ball.Launch(ball.position, { velX, 3.7f, -10.0f }, ShotType::FLAT);
                                     isServeRally = true;
                                 }
                             }
@@ -364,10 +395,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
                 enemy.Update(ball, currentSpeedFactor);
                 ball.Update(currentSpeedFactor);
 
+                // ÁùÄÂú∞Âà§ÂÆö
                 if (ball.isMoving && ball.hasLanded) {
                     if (isServeRally) {
-                        float serverX = isPlayerServer ? player.position.x : enemy.position.x;
-                        bool inBox = IsInServiceBox(ball.landingPos, isPlayerServer, serverX);
+                        // ÊâìÁêÉÊôÇ„Å´Ë®òÊÜ∂„Åó„Åü serveStartX „ÅßÂà§ÂÆöÔºÅ
+                        bool inBox = IsInServiceBox(ball.landingPos, isPlayerServer, serveStartX);
+
+                        isServeRally = false; // Âà§ÂÆö„Åó„Åü„ÇâÁõ¥„Å°„Å´Ëß£Èô§
 
                         if (!inBox) {
                             faultCount++;
@@ -376,15 +410,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
                                 AddPoint(playerPoint, "DOUBLE FAULT!");
                             }
                             else {
-                                //SoundManager::GetInstance().Play(SE::OUT);
                                 resultMessage = "FAULT!";
                                 messageTimer = 180;
-                                isServeRally = false;
                                 ResetServePos();
                             }
-                        }
-                        else {
-                            isServeRally = false;
                         }
                     }
                     else {
@@ -413,7 +442,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
                 }
             }
 
-            // Åö 3Dï`âÊÅiÉRÅ[ÉgÅEÉLÉÉÉâÅEÉ{Å[ÉãÅjÇçsÇ§ëOÇ…ÅAÉQÅ[ÉÄíÜîwåiâÊëúÇï`âÊ
             if (gameBgHandle != -1) {
                 DrawExtendGraph(0, 0, 1280, 720, gameBgHandle, FALSE);
             }
@@ -426,9 +454,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
             court.Draw();
             player.DrawReachArea();
+            player.DrawImpactEffect();
+
             ball.DrawShadow();
             ball.DrawLandingPoint();
             ball.DrawPredictMarker();
+            ball.DrawTimingRing();
 
             player.Draw();
             enemy.Draw();
@@ -436,10 +467,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
             if (isPlayerServer) {
                 if (ball.isTossing) {
-                    DrawString(10, 10, "A / D ÉLÅ[(ÉRÅ[ÉXë_Ç¢) + ç∂ÉNÉäÉbÉN: ÉTÅ[ÉuÅI", GetColor(255, 255, 0));
+                    DrawString(10, 10, "A / D „Ç≠„Éº(„Ç≥„Éº„ÇπÁãô„ÅÑ) + Â∑¶„ÇØ„É™„ÉÉ„ÇØ: „Çµ„Éº„ÉñÔºÅ", GetColor(255, 255, 0));
                 }
                 else {
-                    std::string serveStr = "RÉLÅ[: ÉgÉXÇè„Ç∞ÇÈ (YOUR SERVE";
+                    std::string serveStr = "R„Ç≠„Éº: „Éà„Çπ„Çí‰∏ä„Åí„Çã (YOUR SERVE";
                     if (faultCount == 1) serveStr += " - 2nd SERVE)";
                     else serveStr += ")";
                     DrawString(10, 10, serveStr.c_str(), (faultCount == 1) ? GetColor(255, 100, 100) : GetColor(0, 255, 255));
@@ -453,12 +484,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
             std::string statusInfo = "[CPU: " + std::string(diffNames[selectedDiffIndex]) + "]";
             if (selectedSpeedIndex != 0) statusInfo += " [" + std::string(speedNames[selectedSpeedIndex]) + "]";
-            DrawString(10, 30, statusInfo.c_str(), speedColors[selectedSpeedIndex]);
-            DrawString(10, 50, "ESCÉLÅ[ / PÉLÅ[: É|Å[ÉY", GetColor(200, 200, 200));
+            DrawString(10, 30, statusInfo.c_str(), diffColors[selectedDiffIndex]);
+            DrawString(10, 50, "ESC„Ç≠„Éº / P„Ç≠„Éº: „Éù„Éº„Ç∫", GetColor(200, 200, 200));
 
             DrawFormatString(10, 690, GetColor(255, 255, 255), "FPS: %.1f", fpsManager.GetFps());
 
-            // ÉXÉRÉAÉ{Å[Éh
             DrawBox(930, 10, 1260, 120, GetColor(0, 0, 0), TRUE);
             DrawBox(930, 10, 1260, 120, GetColor(255, 255, 255), FALSE);
 
@@ -511,7 +541,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
                 }
 
                 SetFontSize(16);
-                DrawString(510, 490, "W/S Ç‹ÇΩÇÕ è\éöÉLÅ[: ëIë  ENTER: åàíË", GetColor(200, 200, 200));
+                DrawString(510, 490, "W/S „Åæ„Åü„ÅØ ÂçÅÂ≠ó„Ç≠„Éº: ÈÅ∏Êäû  ENTER: Ê±∫ÂÆö", GetColor(200, 200, 200));
             }
         }
         else if (currentState == GameState::RESULT) {

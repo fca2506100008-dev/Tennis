@@ -1,11 +1,12 @@
 ﻿#pragma once
 #include "Character.h"
 
-// 難易度の定義
+// 難易度の定義（SUPER_HARDを追加）
 enum class Difficulty {
     EASY,
     NORMAL,
-    HARD
+    HARD,
+    SUPER_HARD
 };
 
 class Enemy : public Character {
@@ -17,7 +18,7 @@ public:
 
     Enemy(Vector3 startPos);
 
-    // 難易度設定関数の追加
+    // 難易度設定関数
     void SetDifficulty(Difficulty diff);
 
     void Update(Ball& ball, float speedFactor = 1.0f) override;
