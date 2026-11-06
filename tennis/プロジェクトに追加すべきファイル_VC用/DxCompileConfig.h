@@ -2,7 +2,7 @@
 //
 //		ＤＸライブラリ　コンパイルコンフィグヘッダファイル
 //
-//				Ver 3.24f
+//				Ver 3.25 
 //
 // ----------------------------------------------------------------------------
 
@@ -226,6 +226,7 @@
 #endif
 
 
+
 #ifndef WINDOWS_DESKTOP_OS
 	#ifndef DX_NON_BEEP
 		#define DX_NON_BEEP
@@ -257,6 +258,7 @@
 #define DX_NON_DIRECT3D11
 #define DX_NON_DIRECT3D9
 #endif
+
 
 
 
@@ -436,11 +438,13 @@
 
 
 
+
 #if defined( _WIN64 ) || defined( __ANDROID__ ) || defined( __APPLE__ ) || defined( DX_GCC_COMPILE )
 	#ifndef DX_NON_INLINE_ASM
 		#define DX_NON_INLINE_ASM
 	#endif
 #endif
+
 
 
 

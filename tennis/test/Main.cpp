@@ -132,7 +132,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     int faultCount = 0;
     bool isServeRally = false;
-    float serveStartX = 0.0f; // ★ サーブを打った瞬間のサーバー位置を記録する変数
+    float serveStartX = 0.0f;
 
     GameState currentState = GameState::TITLE;
     std::string winnerText = "";
@@ -217,18 +217,16 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     // サービスボックス判定
     auto IsInServiceBox = [&](Vector3 pos, bool serverIsPlayer, float sX) -> bool {
-        const float MARGIN = 3.0f; // 判定あそび幅
+        const float MARGIN = 6.0f;
         float halfWidth = SINGLES_WIDTH * 0.5f; // 45.0f
 
         if (serverIsPlayer) {
             if (pos.z < -MARGIN || pos.z >(SERVICE_LINE_Z + MARGIN)) return false;
 
             if (sX >= 0.0f) {
-                // 右サーブ ➔ 奥の【左】ボックス (X: -45.0f 〜 0.0f)
                 return (pos.x >= -halfWidth - MARGIN && pos.x <= MARGIN);
             }
             else {
-                // 左サーブ ➔ 奥の【右】ボックス (X: 0.0f 〜 45.0f)
                 return (pos.x >= -MARGIN && pos.x <= halfWidth + MARGIN);
             }
         }
@@ -236,11 +234,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
             if (pos.z > MARGIN || pos.z < (-SERVICE_LINE_Z - MARGIN)) return false;
 
             if (sX >= 0.0f) {
-                // CPU右サーブ ➔ 手前の【左】ボックス (X: -45.0f 〜 0.0f)
                 return (pos.x >= -halfWidth - MARGIN && pos.x <= MARGIN);
             }
             else {
-                // CPU左サーブ ➔ 手前の【右】ボックス (X: 0.0f 〜 45.0f)
                 return (pos.x >= -MARGIN && pos.x <= halfWidth + MARGIN);
             }
         }
@@ -348,16 +344,33 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
                                 if (shotInput && ball.position.y >= 20.0f) {
                                     ShotType sType = ShotType::FLAT;
 
-                                    // 打った時点のプレイヤー位置を記憶！
                                     serveStartX = player.position.x;
 
+                                    // 左右コース調整（デュース: -22.5f / アド: 22.5f）
                                     float targetX = (serveStartX >= 0.0f) ? -22.5f : 22.5f;
-                                    if (aKey) targetX -= 10.0f;
-                                    if (dKey) targetX += 10.0f;
+                                    if (aKey) targetX -= 8.0f;
+                                    if (dKey) targetX += 8.0f;
 
-                                    float velX = (targetX - serveStartX) * 0.018f;
-                                    float serveVelY = 3.7f;
-                                    float serveVelZ = 10.0f;
+                                    // ★ サービスボックス中央（Z = 75.0f）を着地目標に指定
+                                    float targetZ = 75.0f;
+
+                                    ShotConfig config = GetShotConfig(sType);
+                                    float g = config.gravity * currentSpeedFactor;
+                                    float y0 = ball.position.y;
+
+                                    // ★ ネットを余裕をもって超える上向き初速
+                                    float serveVelY = 1.8f;
+
+                                    // 着地までの必要ステップ数を逆算
+                                    float discriminant = serveVelY * serveVelY + 2.0f * g * y0;
+                                    float steps = (serveVelY + std::sqrt(discriminant)) / g;
+
+                                    float distZ = targetZ - ball.position.z;
+                                    float distX = targetX - ball.position.x;
+
+                                    // 物理速度を算出
+                                    float serveVelZ = distZ / steps;
+                                    float velX = distX / steps;
 
                                     ball.Launch(ball.position, { velX, serveVelY, serveVelZ }, sType);
                                     isServeRally = true;
@@ -377,13 +390,26 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
                             }
                             else {
                                 if (ball.velocity.y <= 1.0f) {
-                                    // 打った時点のCPU位置を記憶！
                                     serveStartX = enemy.position.x;
 
                                     float targetX = (serveStartX >= 0.0f) ? -22.5f : 22.5f;
-                                    float velX = (targetX - serveStartX) * 0.018f;
+                                    float targetZ = -75.0f;
 
-                                    ball.Launch(ball.position, { velX, 3.7f, -10.0f }, ShotType::FLAT);
+                                    ShotConfig config = GetShotConfig(ShotType::FLAT);
+                                    float g = config.gravity * currentSpeedFactor;
+                                    float y0 = ball.position.y;
+                                    float serveVelY = 1.8f;
+
+                                    float discriminant = serveVelY * serveVelY + 2.0f * g * y0;
+                                    float steps = (serveVelY + std::sqrt(discriminant)) / g;
+
+                                    float distZ = targetZ - ball.position.z;
+                                    float distX = targetX - ball.position.x;
+
+                                    float serveVelZ = distZ / steps;
+                                    float velX = distX / steps;
+
+                                    ball.Launch(ball.position, { velX, serveVelY, serveVelZ }, ShotType::FLAT);
                                     isServeRally = true;
                                 }
                             }
@@ -395,13 +421,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
                 enemy.Update(ball, currentSpeedFactor);
                 ball.Update(currentSpeedFactor);
 
-                // 着地判定
                 if (ball.isMoving && ball.hasLanded) {
                     if (isServeRally) {
-                        // 打球時に記憶した serveStartX で判定！
                         bool inBox = IsInServiceBox(ball.landingPos, isPlayerServer, serveStartX);
 
-                        isServeRally = false; // 判定したら直ちに解除
+                        isServeRally = false;
 
                         if (!inBox) {
                             faultCount++;
