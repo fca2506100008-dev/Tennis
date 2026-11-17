@@ -9,18 +9,6 @@
 #include <cmath>
 #include <string>
 
-#ifndef SINGLES_WIDTH
-#define SINGLES_WIDTH 90.0f
-#endif
-
-#ifndef COURT_LENGTH
-#define COURT_LENGTH 240.0f
-#endif
-
-#ifndef SERVICE_LINE_Z
-#define SERVICE_LINE_Z 140.0f
-#endif
-
 enum class GameState {
     TITLE,
     PLAY,
@@ -42,6 +30,7 @@ std::string GetScoreText(int pScore, int eScore) {
     return pStr + " - " + eStr;
 }
 
+// 縁取り文字列描画ヘルパー関数
 void DrawBorderedString(int x, int y, const char* string, unsigned int color, unsigned int borderColor = GetColor(0, 0, 0)) {
     DrawString(x - 1, y, string, borderColor);
     DrawString(x + 1, y, string, borderColor);
@@ -55,7 +44,7 @@ void DrawBorderedString(int x, int y, const char* string, unsigned int color, un
     DrawString(x, y, string, color);
 }
 
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
+int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nCmdShow) {
     ChangeWindowMode(TRUE);
     SetGraphMode(1280, 720, 32);
 
@@ -68,7 +57,24 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     SoundManager::GetInstance().Init();
 
     int titleBgHandle = LoadGraph("title_bg.png.jpg");
-    int gameBgHandle = LoadGraph("game_bg.png.jpg");
+
+    // 難易度ごとの背景画像（0:EASY, 1:NORMAL, 2:HARD, 3:SUPER HARD）
+    int gameBgHandles[4] = {
+        LoadGraph("game_bg_easy.png.jpg"),
+        LoadGraph("game_bg_normal.png.jpg"),
+        LoadGraph("game_bg_hard.png.jpg"),
+        LoadGraph("game_bg_superhard.png.jpg")
+    };
+    // 個別画像がない難易度用の共通デフォルト背景
+    int defaultGameBgHandle = LoadGraph("game_bg.png.jpg");
+
+    // 画像ファイルが存在しない場合の難易度別フォールバック背景色
+    const unsigned int diffBgColors[4] = {
+        GetColor(30, 150, 80),   // EASY: 爽やかな昼のグリーン
+        GetColor(30, 140, 50),   // NORMAL: 標準のコートグリーン
+        GetColor(180, 90, 40),   // HARD: 夕暮れ・クレーコート風のオレンジブラウン
+        GetColor(40, 20, 70)     // SUPER HARD: ナイトマッチ風のダークパープル
+    };
 
     FpsManager fpsManager;
 
@@ -215,29 +221,28 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         messageTimer = 120;
         };
 
-    // サービスボックス判定
+    // Court.cpp の白線描画（SINGLES_WIDTH, SERVICE_LENGTH）と完全一致するサービスボックス判定
     auto IsInServiceBox = [&](Vector3 pos, bool serverIsPlayer, float sX) -> bool {
-        const float MARGIN = 6.0f;
-        float halfWidth = SINGLES_WIDTH * 0.5f; // 45.0f
+        const float MARGIN = 5.0f;
 
         if (serverIsPlayer) {
-            if (pos.z < -MARGIN || pos.z >(SERVICE_LINE_Z + MARGIN)) return false;
+            if (pos.z < -MARGIN || pos.z >(SERVICE_LENGTH + MARGIN)) return false;
 
             if (sX >= 0.0f) {
-                return (pos.x >= -halfWidth - MARGIN && pos.x <= MARGIN);
+                return (pos.x >= -SINGLES_WIDTH - MARGIN && pos.x <= MARGIN);
             }
             else {
-                return (pos.x >= -MARGIN && pos.x <= halfWidth + MARGIN);
+                return (pos.x >= -MARGIN && pos.x <= SINGLES_WIDTH + MARGIN);
             }
         }
         else {
-            if (pos.z > MARGIN || pos.z < (-SERVICE_LINE_Z - MARGIN)) return false;
+            if (pos.z > MARGIN || pos.z < (-SERVICE_LENGTH - MARGIN)) return false;
 
             if (sX >= 0.0f) {
-                return (pos.x >= -halfWidth - MARGIN && pos.x <= MARGIN);
+                return (pos.x >= -SINGLES_WIDTH - MARGIN && pos.x <= MARGIN);
             }
             else {
-                return (pos.x >= -MARGIN && pos.x <= halfWidth + MARGIN);
+                return (pos.x >= -MARGIN && pos.x <= SINGLES_WIDTH + MARGIN);
             }
         }
         };
@@ -343,34 +348,34 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
                                 bool shotInput = mouseLeft && !mouseLeftPrev;
                                 if (shotInput && ball.position.y >= 20.0f) {
                                     ShotType sType = ShotType::FLAT;
-
                                     serveStartX = player.position.x;
 
-                                    // 左右コース調整（デュース: -22.5f / アド: 22.5f）
-                                    float targetX = (serveStartX >= 0.0f) ? -22.5f : 22.5f;
-                                    if (aKey) targetX -= 8.0f;
-                                    if (dKey) targetX += 8.0f;
+                                    // 実際のサービスボックス横幅(SINGLES_WIDTH)の中央を狙う
+                                    float boxCenterX = SINGLES_WIDTH * 0.5f;
+                                    float targetX = (serveStartX >= 0.0f) ? -boxCenterX : boxCenterX;
+                                    if (aKey) targetX -= 12.0f;
+                                    if (dKey) targetX += 12.0f;
 
-                                    // ★ サービスボックス中央（Z = 75.0f）を着地目標に指定
-                                    float targetZ = 75.0f;
+                                    // サービスライン(SERVICE_LENGTH)の65%地点を着地目標に設定
+                                    float targetZ = SERVICE_LENGTH * 0.65f;
 
+                                    // ネット(NET_HEIGHT)を確実に越える十分な打ち上げ初速
+                                    float serveVelY = 4.2f;
+
+                                    // Ball::Update と同じ離散ループで着地までのフレーム数を実測
                                     ShotConfig config = GetShotConfig(sType);
-                                    float g = config.gravity * currentSpeedFactor;
-                                    float y0 = ball.position.y;
+                                    float simY = ball.position.y;
+                                    float simVy = serveVelY;
+                                    int actualSteps = 0;
+                                    while (simY > 0.0f && actualSteps < 1000) {
+                                        simY += simVy * currentSpeedFactor;
+                                        simVy -= config.gravity * currentSpeedFactor;
+                                        actualSteps++;
+                                    }
+                                    if (actualSteps < 1) actualSteps = 1;
 
-                                    // ★ ネットを余裕をもって超える上向き初速
-                                    float serveVelY = 1.8f;
-
-                                    // 着地までの必要ステップ数を逆算
-                                    float discriminant = serveVelY * serveVelY + 2.0f * g * y0;
-                                    float steps = (serveVelY + std::sqrt(discriminant)) / g;
-
-                                    float distZ = targetZ - ball.position.z;
-                                    float distX = targetX - ball.position.x;
-
-                                    // 物理速度を算出
-                                    float serveVelZ = distZ / steps;
-                                    float velX = distX / steps;
+                                    float serveVelZ = (targetZ - ball.position.z) / (actualSteps * currentSpeedFactor);
+                                    float velX = (targetX - ball.position.x) / (actualSteps * currentSpeedFactor);
 
                                     ball.Launch(ball.position, { velX, serveVelY, serveVelZ }, sType);
                                     isServeRally = true;
@@ -392,22 +397,25 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
                                 if (ball.velocity.y <= 1.0f) {
                                     serveStartX = enemy.position.x;
 
-                                    float targetX = (serveStartX >= 0.0f) ? -22.5f : 22.5f;
-                                    float targetZ = -75.0f;
+                                    float boxCenterX = SINGLES_WIDTH * 0.5f;
+                                    float targetX = (serveStartX >= 0.0f) ? -boxCenterX : boxCenterX;
+                                    float targetZ = -SERVICE_LENGTH * 0.65f;
+
+                                    float serveVelY = 4.2f;
 
                                     ShotConfig config = GetShotConfig(ShotType::FLAT);
-                                    float g = config.gravity * currentSpeedFactor;
-                                    float y0 = ball.position.y;
-                                    float serveVelY = 1.8f;
+                                    float simY = ball.position.y;
+                                    float simVy = serveVelY;
+                                    int actualSteps = 0;
+                                    while (simY > 0.0f && actualSteps < 1000) {
+                                        simY += simVy * currentSpeedFactor;
+                                        simVy -= config.gravity * currentSpeedFactor;
+                                        actualSteps++;
+                                    }
+                                    if (actualSteps < 1) actualSteps = 1;
 
-                                    float discriminant = serveVelY * serveVelY + 2.0f * g * y0;
-                                    float steps = (serveVelY + std::sqrt(discriminant)) / g;
-
-                                    float distZ = targetZ - ball.position.z;
-                                    float distX = targetX - ball.position.x;
-
-                                    float serveVelZ = distZ / steps;
-                                    float velX = distX / steps;
+                                    float serveVelZ = (targetZ - ball.position.z) / (actualSteps * currentSpeedFactor);
+                                    float velX = (targetX - ball.position.x) / (actualSteps * currentSpeedFactor);
 
                                     ball.Launch(ball.position, { velX, serveVelY, serveVelZ }, ShotType::FLAT);
                                     isServeRally = true;
@@ -420,6 +428,16 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
                 player.Update(ball, currentSpeedFactor);
                 enemy.Update(ball, currentSpeedFactor);
                 ball.Update(currentSpeedFactor);
+
+                // サーブ中の相手ノーバウンドボレーによる誤フォルト防止処理
+                if (ball.isMoving && isServeRally) {
+                    if (isPlayerServer && ball.velocity.z < 0.0f) {
+                        isServeRally = false;
+                    }
+                    else if (!isPlayerServer && ball.velocity.z > 0.0f) {
+                        isServeRally = false;
+                    }
+                }
 
                 if (ball.isMoving && ball.hasLanded) {
                     if (isServeRally) {
@@ -466,8 +484,16 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
                 }
             }
 
-            if (gameBgHandle != -1) {
-                DrawExtendGraph(0, 0, 1280, 720, gameBgHandle, FALSE);
+            // 選択中の難易度に応じた背景の描画
+            int currentBgHandle = (gameBgHandles[selectedDiffIndex] != -1)
+                ? gameBgHandles[selectedDiffIndex]
+                : defaultGameBgHandle;
+
+            if (currentBgHandle != -1) {
+                DrawExtendGraph(0, 0, 1280, 720, currentBgHandle, FALSE);
+            }
+            else {
+                DrawBox(0, 0, 1280, 720, diffBgColors[selectedDiffIndex], TRUE);
             }
 
             SetupCamera_Perspective(70.0f * 3.14159265f / 180.0f);
@@ -606,7 +632,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     }
 
     if (titleBgHandle != -1) DeleteGraph(titleBgHandle);
-    if (gameBgHandle != -1)  DeleteGraph(gameBgHandle);
+    if (defaultGameBgHandle != -1) DeleteGraph(defaultGameBgHandle);
+    for (int i = 0; i < 4; i++) {
+        if (gameBgHandles[i] != -1) DeleteGraph(gameBgHandles[i]);
+    }
 
     DxLib_End();
     return 0;

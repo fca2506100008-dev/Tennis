@@ -4,7 +4,9 @@
 #include <cmath>
 
 Player::Player(Vector3 startPos)
-    : Character(startPos, GetColor(50, 120, 255)) {
+    : Character(startPos, GetColor(50, 120, 255)),
+    effectAlpha(0),
+    effectRadius(0.0f) {
 }
 
 void Player::Update(Ball& ball, float speedFactor) {
@@ -21,23 +23,23 @@ void Player::Update(Ball& ball, float speedFactor) {
     static bool isServingLastFrame = false;
 
     if (isMyServeWaiting) {
-        // サーブ待機状態に入った最初の1フレームで、初期配置（position.x >= 0）から打つサイドを決定・ロック
         if (!isServingLastFrame) {
             serveFromRight = (position.x >= 0.0f);
         }
 
-        // A / D キー（または十字キー左右）で左右移動
-        if (CheckHitKey(KEY_INPUT_A) || CheckHitKey(KEY_INPUT_LEFT))  position.x -= moveSpeed;
-        if (CheckHitKey(KEY_INPUT_D) || CheckHitKey(KEY_INPUT_RIGHT)) position.x += moveSpeed;
+        // トスを上げる前（!ball.isTossing）だけ立ち位置を左右調整でき、
+        // トスを上げた後（ball.isTossing）は A/D キーをコース狙い専用にするため位置を固定
+        if (!ball.isTossing) {
+            if (CheckHitKey(KEY_INPUT_A) || CheckHitKey(KEY_INPUT_LEFT))  position.x -= moveSpeed;
+            if (CheckHitKey(KEY_INPUT_D) || CheckHitKey(KEY_INPUT_RIGHT)) position.x += moveSpeed;
 
-        // センターライン（x = 0.0f）跨ぎ防止ガード
-        if (serveFromRight) {
-            // 右サイド（デュースサイド）からのサーブ：センターラインより左（x < 0.0f）へ行けない
-            if (position.x < 0.0f) position.x = 0.0f;
-        }
-        else {
-            // 左サイド（アドバンテージサイド）からのサーブ：センターラインより右（x > 0.0f）へ行けない
-            if (position.x > 0.0f) position.x = 0.0f;
+            // センターライン（x = 0.0f）跨ぎ防止ガード
+            if (serveFromRight) {
+                if (position.x < 0.0f) position.x = 0.0f;
+            }
+            else {
+                if (position.x > 0.0f) position.x = 0.0f;
+            }
         }
     }
     else {
@@ -50,7 +52,6 @@ void Player::Update(Ball& ball, float speedFactor) {
         if (CheckHitKey(KEY_INPUT_S) || CheckHitKey(KEY_INPUT_DOWN)) position.z -= moveSpeed;
     }
 
-    // 前フレームのサーブ待機状態を更新
     isServingLastFrame = isMyServeWaiting;
 
     // プレイヤーの移動制限エリア（コート範囲内）
@@ -73,7 +74,6 @@ void Player::Update(Ball& ball, float speedFactor) {
             float targetZ = 220.0f;
             float distanceZ = targetZ - position.z;
 
-            // A / D キーで狙う左右コースの補正
             float dirX = 0.0f;
             if (CheckHitKey(KEY_INPUT_A) || CheckHitKey(KEY_INPUT_LEFT))  dirX = -0.8f;
             if (CheckHitKey(KEY_INPUT_D) || CheckHitKey(KEY_INPUT_RIGHT)) dirX = 0.8f;
@@ -123,7 +123,6 @@ void Player::DrawReachArea() const {
     DrawPolygonIndexed3D(vertex, DIV, index, DIV - 2, DX_NONE_GRAPH, FALSE);
 }
 
-// LNK2019 未解決外部シンボル参照エラー対策（インパクトエフェクト描画関数の定義）
 void Player::DrawImpactEffect() const {
-    // ショットヒット時のエフェクト処理用（必要に応じて記述）
+    // ショットヒット時のエフェクト処理用
 }
