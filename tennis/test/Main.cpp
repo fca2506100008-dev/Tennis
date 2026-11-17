@@ -30,7 +30,6 @@ std::string GetScoreText(int pScore, int eScore) {
     return pStr + " - " + eStr;
 }
 
-// 縁取り文字列描画ヘルパー関数
 void DrawBorderedString(int x, int y, const char* string, unsigned int color, unsigned int borderColor = GetColor(0, 0, 0)) {
     DrawString(x - 1, y, string, borderColor);
     DrawString(x + 1, y, string, borderColor);
@@ -65,15 +64,13 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
         LoadGraph("game_bg_hard.png.jpg"),
         LoadGraph("game_bg_superhard.png.jpg")
     };
-    // 個別画像がない難易度用の共通デフォルト背景
     int defaultGameBgHandle = LoadGraph("game_bg.png.jpg");
 
-    // 画像ファイルが存在しない場合の難易度別フォールバック背景色
     const unsigned int diffBgColors[4] = {
-        GetColor(30, 150, 80),   // EASY: 爽やかな昼のグリーン
-        GetColor(30, 140, 50),   // NORMAL: 標準のコートグリーン
-        GetColor(180, 90, 40),   // HARD: 夕暮れ・クレーコート風のオレンジブラウン
-        GetColor(40, 20, 70)     // SUPER HARD: ナイトマッチ風のダークパープル
+        GetColor(30, 150, 80),
+        GetColor(30, 140, 50),
+        GetColor(180, 90, 40),
+        GetColor(40, 20, 70)
     };
 
     FpsManager fpsManager;
@@ -95,6 +92,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
     bool dKeyPrev = false;
     bool wKeyPrev = false;
     bool sKeyPrev = false;
+    bool cKeyPrev = false;
 
     bool leftKeyPrev = false;
     bool rightKeyPrev = false;
@@ -107,6 +105,14 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
     bool pKeyPrev = false;
 
     bool mouseLeftPrev = false;
+
+    // 長押しショット設定（false: クリック必須 / true: 長押しOK）
+    bool isHoldShotEnabled = false;
+    player.SetAllowHoldShot(isHoldShotEnabled);
+
+    // ★ タイトル画面の終了確認ダイアログ用変数
+    bool isConfirmExit = false;
+    int exitMenuIndex = 1; // 0: はい / 1: いいえ（デフォルトは「いいえ」）
 
     std::string resultMessage = "";
     int messageTimer = 0;
@@ -221,7 +227,6 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
         messageTimer = 120;
         };
 
-    // Court.cpp の白線描画（SINGLES_WIDTH, SERVICE_LENGTH）と完全一致するサービスボックス判定
     auto IsInServiceBox = [&](Vector3 pos, bool serverIsPlayer, float sX) -> bool {
         const float MARGIN = 5.0f;
 
@@ -255,6 +260,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
         bool dKey = CheckHitKey(KEY_INPUT_D) != 0;
         bool wKey = CheckHitKey(KEY_INPUT_W) != 0;
         bool sKey = CheckHitKey(KEY_INPUT_S) != 0;
+        bool cKey = CheckHitKey(KEY_INPUT_C) != 0;
 
         bool leftKey = CheckHitKey(KEY_INPUT_LEFT) != 0;
         bool rightKey = CheckHitKey(KEY_INPUT_RIGHT) != 0;
@@ -269,23 +275,59 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
         int mouseInput = GetMouseInput();
         bool mouseLeft = (mouseInput & MOUSE_INPUT_LEFT) != 0;
 
+        // Cキーで長押しショットの ON / OFF をいつでも切り替え（確認ダイアログ中は除く）
+        if (!isConfirmExit && cKey && !cKeyPrev) {
+            isHoldShotEnabled = !isHoldShotEnabled;
+            player.SetAllowHoldShot(isHoldShotEnabled);
+        }
+
         float currentSpeedFactor = speedList[selectedSpeedIndex] * 0.5f;
 
         if (currentState == GameState::TITLE) {
-            if (leftKey && !leftKeyPrev)   selectedGameIndex = (selectedGameIndex + 2) % 3;
-            if (rightKey && !rightKeyPrev) selectedGameIndex = (selectedGameIndex + 1) % 3;
+            if (!isConfirmExit) {
+                // 通常のタイトル画面操作
+                if (leftKey && !leftKeyPrev)   selectedGameIndex = (selectedGameIndex + 2) % 3;
+                if (rightKey && !rightKeyPrev) selectedGameIndex = (selectedGameIndex + 1) % 3;
 
-            if (upKey && !upKeyPrev)     selectedDiffIndex = (selectedDiffIndex + 3) % 4;
-            if (downKey && !downKeyPrev) selectedDiffIndex = (selectedDiffIndex + 1) % 4;
+                if (upKey && !upKeyPrev)     selectedDiffIndex = (selectedDiffIndex + 3) % 4;
+                if (downKey && !downKeyPrev) selectedDiffIndex = (selectedDiffIndex + 1) % 4;
 
-            if (shiftKey && !shiftKeyPrev) {
-                selectedSpeedIndex = (selectedSpeedIndex + 1) % 4;
+                if (shiftKey && !shiftKeyPrev) {
+                    selectedSpeedIndex = (selectedSpeedIndex + 1) % 4;
+                }
+
+                if (escKey && !escKeyPrev) {
+                    // ESCキーで終了確認ダイアログを開く
+                    isConfirmExit = true;
+                    exitMenuIndex = 1; // 誤操作防止のため初期カーソルは「いいえ」
+                }
+                else if (enterKey && !enterKeyPrev) {
+                    ResetAllGame();
+                    enemy.SetDifficulty(static_cast<Difficulty>(selectedDiffIndex));
+                    currentState = GameState::PLAY;
+                }
             }
+            else {
+                // ★ 終了確認ダイアログ操作（左右キーで はい / いいえ 選択）
+                if ((leftKey && !leftKeyPrev) || (aKey && !aKeyPrev) ||
+                    (rightKey && !rightKeyPrev) || (dKey && !dKeyPrev)) {
+                    exitMenuIndex = 1 - exitMenuIndex; // 0 と 1 を切り替え
+                }
 
-            if (enterKey && !enterKeyPrev) {
-                ResetAllGame();
-                enemy.SetDifficulty(static_cast<Difficulty>(selectedDiffIndex));
-                currentState = GameState::PLAY;
+                if (escKey && !escKeyPrev) {
+                    // もう一度ESCキーを押したらキャンセルして閉じる
+                    isConfirmExit = false;
+                }
+                else if (enterKey && !enterKeyPrev) {
+                    if (exitMenuIndex == 0) {
+                        // 「はい」選択時：メインループを抜けてゲーム終了
+                        break;
+                    }
+                    else {
+                        // 「いいえ」選択時：ダイアログを閉じる
+                        isConfirmExit = false;
+                    }
+                }
             }
 
             if (titleBgHandle != -1) {
@@ -293,33 +335,68 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
             }
 
             SetFontSize(64);
-            DrawBorderedString(400, 100, "3D TENNIS GAME", GetColor(255, 255, 255));
+            DrawBorderedString(400, 80, "3D TENNIS GAME", GetColor(255, 255, 255));
 
-            SetFontSize(20);
-            DrawBorderedString(430, 210, "MATCH SETTING (Left / Right Key):", GetColor(200, 200, 255));
+            SetFontSize(18);
+            DrawBorderedString(430, 175, "MATCH SETTING (Left / Right Key):", GetColor(200, 200, 255));
             std::string modeText = "<  " + std::to_string(targetGamesList[selectedGameIndex]) + " GAMES MATCH  >";
-            SetFontSize(26);
-            DrawBorderedString(450, 235, modeText.c_str(), GetColor(255, 255, 0));
+            SetFontSize(24);
+            DrawBorderedString(450, 198, modeText.c_str(), GetColor(255, 255, 0));
 
-            SetFontSize(20);
-            DrawBorderedString(430, 290, "CPU DIFFICULTY (Up / Down Key):", GetColor(200, 200, 255));
+            SetFontSize(18);
+            DrawBorderedString(430, 240, "CPU DIFFICULTY (Up / Down Key):", GetColor(200, 200, 255));
             std::string diffText = "^  DIFFICULTY: " + std::string(diffNames[selectedDiffIndex]) + "  v";
-            SetFontSize(26);
-            DrawBorderedString(410, 315, diffText.c_str(), diffColors[selectedDiffIndex]);
+            SetFontSize(24);
+            DrawBorderedString(410, 263, diffText.c_str(), diffColors[selectedDiffIndex]);
 
-            SetFontSize(20);
-            DrawBorderedString(430, 370, "SPEED SETTING (SHIFT Key):", GetColor(200, 200, 255));
+            SetFontSize(18);
+            DrawBorderedString(430, 305, "SPEED SETTING (SHIFT Key):", GetColor(200, 200, 255));
             std::string speedText = "[ SHIFT ] SPEED: " + std::string(speedNames[selectedSpeedIndex]);
-            SetFontSize(26);
-            DrawBorderedString(420, 395, speedText.c_str(), speedColors[selectedSpeedIndex]);
+            SetFontSize(24);
+            DrawBorderedString(420, 328, speedText.c_str(), speedColors[selectedSpeedIndex]);
+
+            SetFontSize(18);
+            DrawBorderedString(430, 370, "HOLD SHOT SETTING (C Key):", GetColor(200, 200, 255));
+            std::string holdText = isHoldShotEnabled ? "[ C ] HOLD SHOT: ON (長押し可)" : "[ C ] HOLD SHOT: OFF (クリックのみ)";
+            unsigned int holdColor = isHoldShotEnabled ? GetColor(0, 255, 180) : GetColor(255, 180, 100);
+            SetFontSize(24);
+            DrawBorderedString(420, 393, holdText.c_str(), holdColor);
 
             SetFontSize(28);
-            DrawBorderedString(460, 480, "PRESS ENTER TO START", GetColor(0, 255, 255));
+            DrawBorderedString(460, 465, "PRESS ENTER TO START", GetColor(0, 255, 255));
 
             SetFontSize(16);
-            DrawBorderedString(380, 560, "操作方法: WASD (移動) / SHIFT (速度/ダッシュ) / Rキー (トス)", GetColor(200, 200, 200));
-            DrawBorderedString(380, 585, "サーブ狙い: A / D キー  /  ショット: 左クリック", GetColor(255, 255, 100));
-            DrawBorderedString(380, 610, "ESC or Pキー: ポーズ", GetColor(200, 200, 200));
+            DrawBorderedString(380, 540, "操作方法: WASD (移動) / SHIFT (速度/ダッシュ) / Rキー (トス)", GetColor(200, 200, 200));
+            DrawBorderedString(380, 565, "サーブ狙い: A / D キー  /  ショット: 左クリック (Cキーで長押し切替)", GetColor(255, 255, 100));
+            DrawBorderedString(380, 590, "ESCキー: ゲーム終了", GetColor(200, 200, 200));
+
+            // ★ 終了確認ダイアログの描画
+            if (isConfirmExit) {
+                SetDrawBlendMode(DX_BLENDMODE_ALPHA, 190);
+                DrawBox(0, 0, 1280, 720, GetColor(0, 0, 0), TRUE);
+                SetDrawBlendMode(DX_BLENDMODE_NOBLEND, 0);
+
+                // ダイアログ枠
+                DrawBox(380, 240, 900, 480, GetColor(25, 30, 45), TRUE);
+                DrawBox(380, 240, 900, 480, GetColor(255, 255, 255), FALSE);
+                DrawBox(382, 242, 898, 478, GetColor(100, 200, 255), FALSE);
+
+                SetFontSize(28);
+                DrawBorderedString(465, 285, "ゲームを終了しますか？", GetColor(255, 255, 255));
+
+                SetFontSize(28);
+                if (exitMenuIndex == 0) {
+                    DrawBorderedString(475, 365, "> はい <", GetColor(255, 80, 80));
+                    DrawBorderedString(685, 365, "いいえ", GetColor(180, 180, 180));
+                }
+                else {
+                    DrawBorderedString(495, 365, "はい", GetColor(180, 180, 180));
+                    DrawBorderedString(665, 365, "> いいえ <", GetColor(255, 255, 0));
+                }
+
+                SetFontSize(16);
+                DrawBorderedString(480, 435, "左右キー: 選択   ENTER: 決定   ESC: 戻る", GetColor(200, 200, 200));
+            }
         }
         else if (currentState == GameState::PLAY || currentState == GameState::PAUSE) {
 
@@ -345,24 +422,19 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
                                 }
                             }
                             else {
-                                bool shotInput = mouseLeft && !mouseLeftPrev;
+                                bool shotInput = isHoldShotEnabled ? mouseLeft : (mouseLeft && !mouseLeftPrev);
                                 if (shotInput && ball.position.y >= 20.0f) {
                                     ShotType sType = ShotType::FLAT;
                                     serveStartX = player.position.x;
 
-                                    // 実際のサービスボックス横幅(SINGLES_WIDTH)の中央を狙う
                                     float boxCenterX = SINGLES_WIDTH * 0.5f;
                                     float targetX = (serveStartX >= 0.0f) ? -boxCenterX : boxCenterX;
                                     if (aKey) targetX -= 12.0f;
                                     if (dKey) targetX += 12.0f;
 
-                                    // サービスライン(SERVICE_LENGTH)の65%地点を着地目標に設定
                                     float targetZ = SERVICE_LENGTH * 0.65f;
-
-                                    // ネット(NET_HEIGHT)を確実に越える十分な打ち上げ初速
                                     float serveVelY = 4.2f;
 
-                                    // Ball::Update と同じ離散ループで着地までのフレーム数を実測
                                     ShotConfig config = GetShotConfig(sType);
                                     float simY = ball.position.y;
                                     float simVy = serveVelY;
@@ -429,7 +501,6 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
                 enemy.Update(ball, currentSpeedFactor);
                 ball.Update(currentSpeedFactor);
 
-                // サーブ中の相手ノーバウンドボレーによる誤フォルト防止処理
                 if (ball.isMoving && isServeRally) {
                     if (isPlayerServer && ball.velocity.z < 0.0f) {
                         isServeRally = false;
@@ -484,7 +555,6 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
                 }
             }
 
-            // 選択中の難易度に応じた背景の描画
             int currentBgHandle = (gameBgHandles[selectedDiffIndex] != -1)
                 ? gameBgHandles[selectedDiffIndex]
                 : defaultGameBgHandle;
@@ -535,7 +605,10 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
             std::string statusInfo = "[CPU: " + std::string(diffNames[selectedDiffIndex]) + "]";
             if (selectedSpeedIndex != 0) statusInfo += " [" + std::string(speedNames[selectedSpeedIndex]) + "]";
             DrawString(10, 30, statusInfo.c_str(), diffColors[selectedDiffIndex]);
-            DrawString(10, 50, "ESCキー / Pキー: ポーズ", GetColor(200, 200, 200));
+
+            std::string holdStatus = isHoldShotEnabled ? "[HOLD SHOT: ON] (Cキーで切替)" : "[HOLD SHOT: OFF] (Cキーで切替)";
+            DrawString(10, 50, holdStatus.c_str(), isHoldShotEnabled ? GetColor(0, 255, 180) : GetColor(255, 200, 120));
+            DrawString(10, 70, "ESCキー / Pキー: ポーズ", GetColor(200, 200, 200));
 
             DrawFormatString(10, 690, GetColor(255, 255, 255), "FPS: %.1f", fpsManager.GetFps());
 
@@ -613,6 +686,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
         dKeyPrev = dKey;
         wKeyPrev = wKey;
         sKeyPrev = sKey;
+        cKeyPrev = cKey;
 
         leftKeyPrev = leftKey;
         rightKeyPrev = rightKey;

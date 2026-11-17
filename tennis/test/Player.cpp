@@ -6,7 +6,8 @@
 Player::Player(Vector3 startPos)
     : Character(startPos, GetColor(50, 120, 255)),
     effectAlpha(0),
-    effectRadius(0.0f) {
+    effectRadius(0.0f),
+    allowHoldShot(false) {
 }
 
 void Player::Update(Ball& ball, float speedFactor) {
@@ -21,6 +22,12 @@ void Player::Update(Ball& ball, float speedFactor) {
     // サーブ待機中のサイド記憶・ロック制御
     static bool serveFromRight = true;
     static bool isServingLastFrame = false;
+
+    // 前フレームのマウス左クリック状態を保持
+    static bool mouseLeftPrev = false;
+    bool mouseLeft = (GetMouseInput() & MOUSE_INPUT_LEFT) != 0;
+    bool mouseLeftTriggered = (mouseLeft && !mouseLeftPrev);
+    mouseLeftPrev = mouseLeft;
 
     if (isMyServeWaiting) {
         if (!isServingLastFrame) {
@@ -62,10 +69,10 @@ void Player::Update(Ball& ball, float speedFactor) {
 
     if (!ball.isMoving) return;
 
-    // マウス左クリックでショット実行（ラリー中）
-    bool mouseLeft = (GetMouseInput() & MOUSE_INPUT_LEFT) != 0;
+    // ★ 長押し設定（allowHoldShot）に応じて入力判定を切り替え
+    bool canSwing = allowHoldShot ? mouseLeft : mouseLeftTriggered;
 
-    if (mouseLeft) {
+    if (canSwing) {
         float dx = ball.position.x - position.x;
         float dz = ball.position.z - position.z;
         float distSq = dx * dx + dz * dz;
